@@ -14,7 +14,7 @@ from __future__ import annotations  # 必须只位于模块文档字符串之后
 import json
 from pathlib import Path
 
-
+# 输入是一个候选快照目录，输出是布尔值，表示其中是否有完整模型权重
 def _has_model_weights(snapshot: Path) -> bool:
     direct_weights = (
         "model.safetensors",
@@ -39,7 +39,8 @@ def _has_model_weights(snapshot: Path) -> bool:
             return True
     return False
 
-
+# 找到完整缓存时，返回本地快照目录字符串；
+# 找不到时，返回原始模型名字符串
 def resolve_cached_snapshot(model_name: str, cache_dir: str | Path) -> str:
     """Return a local snapshot path when available, otherwise ``model_name``.
 

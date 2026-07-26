@@ -2,10 +2,12 @@
 
 ## 当前定位
 
+- 上下文恢复点：2026-07-26（用户即将压缩上下文）
 - 当前阶段：P2（包基础与领域契约）
 - 当前课次：P2.3（Git 忽略规则）
 - 上一个确认完成文件：`src/paper_rag/utils/hf_cache.py`
-- 下一个项目文件：`.gitignore`
+- 当前待确认文件：`.gitignore`（代码已提供，尚未收到完成确认）
+- `.gitignore` 完成后的下一个文件：`config/default.yaml`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -22,6 +24,14 @@
 - 为兼容 `uv` 的通用解析，项目 Python 支持范围为 `>=3.10,<3.14`，并在
   `[tool.uv]` 中允许 MinerU 所需的预发布依赖。
 
+## 协作规则
+
+- 用户负责创建/修改所有项目文件，并亲自运行安装、测试、服务和 Git 命令。
+- 除非用户明确要求助手执行某项操作，否则助手只提供代码、命令、预期结果和讲解。
+- 助手可在用户明确要求“更新进度”时维护本文件，但不自动提交 Git。
+- 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
+- Git message 使用 Conventional Commits：`<type>(<scope>): <中文摘要>`。
+
 ## 已完成的验证
 
 - 已确认基准工作区是无 Git 历史的源码快照。
@@ -35,8 +45,16 @@
 
 ## 待处理问题
 
-- 提交第一个业务代码 checkpoint 前创建根目录 `.gitignore`，确保 `.venv/`、数据、
-  模型、密钥和缓存不会进入版本库。
+- 确认根目录 `.gitignore` 已创建，且 `git status --short` 不显示 `.venv/`。
+- 重新运行 `uv run pytest -q tests/test_ids.py tests/test_hf_cache.py`。
+- 用户自行创建第一个业务代码 checkpoint；建议 message：
+  `feat(core): 初始化项目骨架与基础工具`。
+- 上述 checkpoint 成功后进入 `config/default.yaml`，再实现 `src/paper_rag/config.py`。
+
+## Git 状态说明
+
+- 已知初始课程文档 checkpoint：`f7469b7 docs(course): establish rebuild learning plan`。
+- 第一个业务代码 checkpoint 尚未收到成功确认，不得在恢复后假定已经提交。
 
 ## 每次课结束必须更新
 

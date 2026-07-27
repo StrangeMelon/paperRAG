@@ -9,10 +9,13 @@
 
 
 
-from __future__ import annotations  # 必须只位于模块文档字符串之后、任何普通语句之前。也就是前面最多只能有一个"""""""包裹的文档字符串
+from __future__ import (
+    annotations,  # 必须只位于模块文档字符串之后、任何普通语句之前。也就是前面最多只能有一个"""""""包裹的文档字符串
+)
 
 import json
 from pathlib import Path
+
 
 # 输入是一个候选快照目录，输出是布尔值，表示其中是否有完整模型权重
 def _has_model_weights(snapshot: Path) -> bool:

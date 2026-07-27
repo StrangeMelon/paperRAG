@@ -1,11 +1,11 @@
 paths:
-  data_root: ./data
-  papers_dir: ./data/papers
-  parsed_dir: ./data/parsed
-  index_dir: ./data/index
-  sqlite_path: ./data/index/papers.sqlite
-  bm25_path: ./data/index/bm25.pkl
-  models_dir: ./data/index/models
+  data_root: ./data         # 所有运行时数据的总目录，下面的目录都在 data_root 下
+  papers_dir: ./data/papers # 下载或导入的原始论文文件
+  parsed_dir: ./data/parsed # PDF 解析后的结构化内容
+  index_dir: ./data/index   # 数据库、检索索引和模型缓存的父目录
+  sqlite_path: ./data/index/papers.sqlite # SQLite 结构化数据库
+  bm25_path: ./data/index/bm25.pkl  # 序列化的 BM25 稀疏检索索引
+  models_dir: ./data/index/models   # 本地模型文件和模型缓存
 
 embedding:
   provider: bge-m3

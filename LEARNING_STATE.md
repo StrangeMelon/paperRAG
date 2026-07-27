@@ -2,12 +2,12 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-26（用户即将压缩上下文）
+- 上下文恢复点：2026-07-27（路径工具验证完成）
 - 当前阶段：P2（包基础与领域契约）
-- 当前课次：P2.3（Git 忽略规则）
-- 上一个确认完成文件：`src/paper_rag/utils/hf_cache.py`
-- 当前待确认文件：`.gitignore`（代码已提供，尚未收到完成确认）
-- `.gitignore` 完成后的下一个文件：`config/default.yaml`
+- 当前课次：P2.5（运行时路径工具）
+- 上一个确认完成文件：`src/paper_rag/utils/paths.py`
+- 当前待处理文件：`src/paper_rag/ingest/__init__.py`
+- ingest 包入口完成后的下一个文件：`tests/test_ingest_schema.py`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -42,19 +42,25 @@
 - `src/paper_rag/utils/ids.py` 已实现；`tests/test_ids.py` 已通过（5 passed）。
 - `src/paper_rag/utils/logger.py` 已实现并通过手工日志验证。
 - `src/paper_rag/utils/hf_cache.py` 已实现；`tests/test_hf_cache.py` 已通过。
+- `config/default.yaml`、`src/paper_rag/config.py` 和 `tests/test_config.py` 已实现；
+  配置测试通过（3 passed），Ruff 检查通过。
+- `src/paper_rag/utils/paths.py` 与 `tests/test_paths.py` 已实现；聚焦测试通过
+  （3 passed），基础模块回归测试及 Ruff 检查通过。
 
 ## 待处理问题
 
-- 确认根目录 `.gitignore` 已创建，且 `git status --short` 不显示 `.venv/`。
-- 重新运行 `uv run pytest -q tests/test_ids.py tests/test_hf_cache.py`。
-- 用户自行创建第一个业务代码 checkpoint；建议 message：
-  `feat(core): 初始化项目骨架与基础工具`。
-- 上述 checkpoint 成功后进入 `config/default.yaml`，再实现 `src/paper_rag/config.py`。
+- 单独保存 `config/default.yaml` 新增的中文路径说明，不与业务实现混合。
+- 用户提交 `src/paper_rag/utils/paths.py` 与 `tests/test_paths.py`。
+- `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
+- 下一步创建 `src/paper_rag/ingest/__init__.py`，随后以测试驱动方式实现
+  `src/paper_rag/ingest/schema.py`。
 
 ## Git 状态说明
 
-- 已知初始课程文档 checkpoint：`f7469b7 docs(course): establish rebuild learning plan`。
-- 第一个业务代码 checkpoint 尚未收到成功确认，不得在恢复后假定已经提交。
+- `909c8f2 feat(core): 初始化项目骨架与基础工具`
+- `0deae55 fix(utils): 修复模型缓存模块的导入顺序`
+- `d4978f0 feat(config): 实现类型化配置加载`
+- 路径工具 checkpoint 尚未提交；`config/default.yaml` 有仅含注释的后续修改。
 
 ## 每次课结束必须更新
 

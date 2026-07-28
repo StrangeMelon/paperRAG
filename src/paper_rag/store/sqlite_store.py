@@ -146,8 +146,8 @@ def get_engine() -> Engine:
         _migrate_chunk_columns(_ENGINE)
 
         log.info(
-            "sqlite engine ready at %s (WAL+busy_timeout)",
-            database_path,
+            f"sqlite engine ready at {database_path} "
+            "(WAL+busy_timeout)"
         )
 
     return _ENGINE
@@ -252,7 +252,7 @@ def set_status(
         paper = session.get(Paper, paper_id)
 
         if paper is None:
-            log.warning("set_status: paper not found %s", paper_id)
+            log.warning(f"set_status: paper not found {paper_id}")
             return
 
         paper.status = status

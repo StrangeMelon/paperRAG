@@ -59,6 +59,26 @@ def test_get_engine_initializes_sqlite_database(
     assert busy_timeout == 5000
     assert foreign_keys == 1
 
+
+def test_get_engine_logs_database_path_without_placeholder(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    store, database_path = _isolated_store(monkeypatch, tmp_path)
+    messages: list[str] = []
+
+    monkeypatch.setattr(
+        store,
+        "log",
+        SimpleNamespace(info=lambda *args: messages.append(args)),
+    )
+
+    store.get_engine()
+
+    assert messages == [
+        (f"sqlite engine ready at {database_path} (WAL+busy_timeout)",)
+    ]
+
 # 测试论文插入功能
 def test_upsert_paper_inserts_metadata(
     monkeypatch,
@@ -163,6 +183,27 @@ def test_set_status_updates_existing_paper_and_ignores_missing(
 
     store.set_status("paper:missing", "failed", error="not found")
     assert store.get_paper("paper:missing") is None
+
+
+def test_set_status_logs_missing_paper_id_without_placeholder(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    store, _ = _isolated_store(monkeypatch, tmp_path)
+    messages: list[str] = []
+
+    monkeypatch.setattr(
+        store,
+        "log",
+        SimpleNamespace(
+            info=lambda *args: None,
+            warning=lambda *args: messages.append(args),
+        ),
+    )
+
+    store.set_status("paper:missing", "failed")
+
+    assert messages == [("set_status: paper not found paper:missing",)]
 
 
 def test_record_and_finish_ingest_step(

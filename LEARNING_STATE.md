@@ -2,12 +2,12 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-28（存储初始化边界测试完成）
-- 当前阶段：P3（SQLite + Qdrant 双存储）
-- 当前课次：P3.4（存储初始化入口）
-- 上一个确认完成文件：`scripts/init_store.py`
-- 当前待处理事项：真实运行 `scripts/init_store.py` 两次验证幂等性
-- 真实初始化 Demo 完成后的下一个文件：`tests/test_init_store_real.py`
+- 上下文恢复点：2026-07-28（P3 存储初始化 checkpoint 已建立）
+- 当前阶段：P4（采集、解析和切块）
+- 当前课次：P4.1（解析子系统包入口）
+- 上一个确认完成文件：`tests/test_init_store_real.py`
+- 当前待处理事项：创建 `src/paper_rag/parse/__init__.py`，建立解析模块边界
+- 包入口验证后的下一个文件：`tests/test_parse_fallback.py`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -84,12 +84,17 @@
   边界测试与 Ruff 均重新通过。
 - `scripts/init_store.py` 与 `tests/test_init_store.py` 已完成，边界测试通过（4 passed）；
   其中 SQLite 用真实临时数据库验证，Qdrant collection 与主流程顺序使用边界 fake。
+- `scripts/init_store.py` 已连接真实 SQLite 与 Qdrant 连续运行两次，验证初始化流程的
+  幂等行为；无 mock 的 `tests/test_init_store_real.py` 已纳入初始化 checkpoint。
+- 存储初始化文件已提交为 `6d0b8e2 feat(store): 实现存储初始化入口与真实验收`，P3
+  阶段结束，课程进入 P4。
 
 ## 待处理问题
 
-- `scripts/init_store.py` 与 `tests/test_init_store.py` 尚未提交。
-- 必须真实运行 `uv run python scripts/init_store.py` 两次并确认第二次不重复创建；
-  随后编写无 mock 的 `tests/test_init_store_real.py`，通过后才能建立初始化 checkpoint。
+- 当前工作区中的 `src/paper_rag/store/sqlite_store.py` 与 `tests/test_sqlite_store.py`
+  修改不属于本次课程状态提交，必须保留且不得混入后续 checkpoint。
+- P4 从解析子系统包入口开始；随后先为 PyMuPDF 降级解析器编写边界测试，再实现解析器，
+  最后用真实生成的 PDF Demo 和无 mock 集成测试验收。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 
 ## Git 状态说明
@@ -105,6 +110,7 @@
 - `24bd07b feat(store): 实现SQLite 元数据与内容存储`
 - `1262c23 chore(style): 修正注释中的易混淆标点`
 - `7d86734 feat(store): 实现 Qdrant 向量存储与真实验收`
+- `6d0b8e2 feat(store): 实现存储初始化入口与真实验收`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

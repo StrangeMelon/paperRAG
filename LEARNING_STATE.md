@@ -2,12 +2,12 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-27（P2 阶段门禁通过）
+- 上下文恢复点：2026-07-28（SQLite 存储实现完成）
 - 当前阶段：P3（SQLite + Qdrant 双存储）
-- 当前课次：P3.1（存储包入口）
-- 上一个确认完成文件：`src/paper_rag/ingest/dedup.py`
-- 当前待处理文件：`src/paper_rag/store/__init__.py`
-- 存储包入口完成后的下一个文件：`tests/test_sqlite_store.py`
+- 当前课次：P3.2（SQLite 元数据存储）
+- 上一个确认完成文件：`src/paper_rag/store/sqlite_store.py`
+- 当前待处理文件：`tests/test_qdrant_store.py`
+- Qdrant 测试契约完成后的下一个文件：`src/paper_rag/store/qdrant_store.py`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -50,14 +50,19 @@
   `tests/test_ingest_schema.py` 通过（4 passed）。
 - `src/paper_rag/ingest/dedup.py` 与测试已完成；聚焦测试通过（2 passed）。
 - P2 阶段全量 `uv run pytest -q` 通过，`uv run ruff check src tests` 通过。
+- `src/paper_rag/store/__init__.py` 已创建并通过导入与 Ruff 验证。
+- `src/paper_rag/store/sqlite_store.py` 已按三个 TDD 切片完成：论文与状态、
+  ingest 步骤与跨来源查重、Section/Chunk 快照及旧库迁移。
+- `tests/test_sqlite_store.py` 最终通过（9 passed）；全量 `uv run pytest -q`
+  通过，SQLite 实现与测试的聚焦 Ruff 检查通过。
 
 ## 待处理问题
 
-- `hf_cache.py`、`test_ids.py`、`test_paths.py` 存在已经过门禁验证的注释、格式和
-  文件末尾换行调整，进入 P3 前由用户单独提交。
+- `src/paper_rag/utils/paths.py` 的一个空行含多余空格，尚未通过全量 Ruff；用户需
+  删除该空格并单独决定是否提交，助手不得擅自覆盖。
+- 用户尚未提交 `src/paper_rag/store/` 与 `tests/test_sqlite_store.py`。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
-- 下一步创建 `src/paper_rag/store/__init__.py`，随后以测试驱动方式实现
-  SQLite 元数据存储。
+- 下一步为 Qdrant 适配器编写纯逻辑测试契约，不要求先启动 Docker 服务。
 
 ## Git 状态说明
 
@@ -68,6 +73,8 @@
 - `826e5c0 feat(utils): 实现运行时路径管理`
 - `d8ce9a5 feat(ingest): 定义论文采集的数据模型`
 - `6d8d2ca feat(ingest): 实现论文采集去重判断`
+- `2f510c3 chore(style): 规范基础工具与测试文件格式`
+- SQLite checkpoint 尚未提交；课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新
 

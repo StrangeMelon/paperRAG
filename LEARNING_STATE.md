@@ -4,10 +4,10 @@
 
 - 上下文恢复点：2026-07-28（P3 存储初始化 checkpoint 已建立）
 - 当前阶段：P4（采集、解析和切块）
-- 当前课次：P4.1（解析子系统包入口）
+- 当前课次：P4.1（采集器抽象契约）
 - 上一个确认完成文件：`tests/test_init_store_real.py`
-- 当前待处理事项：创建 `src/paper_rag/parse/__init__.py`，建立解析模块边界
-- 包入口验证后的下一个文件：`tests/test_parse_fallback.py`
+- 当前待处理事项：创建 `tests/test_ingest_sources.py`，先定义 `PaperSource` 契约
+- 契约测试确认 RED 后的下一个文件：`src/paper_rag/ingest/sources.py`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -31,6 +31,32 @@
 - 助手可在用户明确要求“更新进度”时维护并单独提交本文件，但不得提交其他文件。
 - 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
 - Git message 使用 Conventional Commits：`<type>(<scope>): <中文摘要>`。
+
+## P4 固化顺序
+
+P4 必须按完整数据流推进，不得因为解析器可以直接读取现成 PDF 而跳过真实采集：
+
+1. **采集抽象契约**：`tests/test_ingest_sources.py` ->
+   `src/paper_rag/ingest/sources.py`。
+2. **本地 PDF 采集**：边界测试 -> `src/paper_rag/ingest/local_source.py` -> 真实 Demo ->
+   无 mock 集成测试。验证文件复制、内容哈希 ID、标准目录、`meta.json`、`source.txt`
+   与重复执行幂等性。
+3. **PDF URL 采集**：边界测试 -> `src/paper_rag/ingest/url_source.py` -> 真实 HTTP Demo ->
+   无 mock 集成测试。验证重定向、下载、HTTP 错误、PDF 落盘和临时文件清理。
+4. **arXiv 采集**：边界测试 -> `src/paper_rag/ingest/arxiv_source.py` -> 真实 arXiv Demo ->
+   无 mock 集成测试。验证 ID 归一化、元数据、版本信息、PDF 下载和重复执行。
+5. **OpenAlex 采集**：边界测试 -> `src/paper_rag/ingest/openalex_source.py` -> 真实 API Demo
+   -> 无 mock 集成测试。验证 DOI/Work 查询、倒排摘要还原和开放 PDF 行为。
+6. **Semantic Scholar 采集**：边界测试 ->
+   `src/paper_rag/ingest/semantic_scholar_source.py` -> 真实 API Demo -> 无 mock 集成测试。
+   验证多种标识符、元数据和开放 PDF 行为。
+7. **解析**：完成上述采集 checkpoint 后，依次进入 `src/paper_rag/parse/__init__.py`、
+   PyMuPDF 降级解析、MinerU 本地解析和解析调度器。
+8. **切块**：解析 checkpoint 完成后，依次实现 section splitter、text chunker、
+   contextual chunk、builder、sanity 和 multimodal chunker。
+
+阶段门禁：五类具体采集器的真实 Demo、无 mock 集成测试和 Ruff 检查没有全部通过前，
+不得把当前课次推进到解析；解析未完成真实验收前，不得进入切块。
 
 ## 强制验收协议
 
@@ -93,8 +119,8 @@
 
 - 当前工作区中的 `src/paper_rag/store/sqlite_store.py` 与 `tests/test_sqlite_store.py`
   修改不属于本次课程状态提交，必须保留且不得混入后续 checkpoint。
-- P4 从解析子系统包入口开始；随后先为 PyMuPDF 降级解析器编写边界测试，再实现解析器，
-  最后用真实生成的 PDF Demo 和无 mock 集成测试验收。
+- 原定从 `src/paper_rag/parse/__init__.py` 开始 P4 的顺序已取消；当前只完成了采集后的
+  标准化数据契约和去重规则，尚未实现实际采集，必须按“P4 固化顺序”补齐。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 
 ## Git 状态说明

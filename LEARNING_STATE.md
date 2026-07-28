@@ -32,6 +32,27 @@
 - 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
 - Git message 使用 Conventional Commits：`<type>(<scope>): <中文摘要>`。
 
+## 强制验收协议
+
+对存在依赖边界或外部副作用的功能，必须按以下顺序学习、实现和验收：
+
+1. **边界测试**：在生产代码前可使用 mock，明确输入、输出、异常分支与依赖调用
+   契约。它只证明接口设计，不是功能完成证据。
+2. **生产实现**：实现最小功能，使边界测试通过。
+3. **真实 Demo**：在生产实现后新增可直接运行的 `scripts/demo_*.py`。它必须使用
+   真实服务、真实数据和公共 API，逐步打印数据流与结果，并通过断言和非零退出码
+   表示失败。Demo 必须使用隔离的临时数据或专用 collection，并负责清理，不能污染
+   正式运行数据。
+4. **真实集成测试**：新增无 mock 的 `tests/integration/test_*.py`，验证与 Demo 相同
+   的关键不变量。使用 `uv run pytest -vv -s <目标文件>` 单独运行，以显示每个用例和
+   输出；服务、模型或密钥未准备好时必须明确失败，不能 skip 后宣称验收完成。
+5. **checkpoint**：只有边界测试、真实 Demo、真实集成测试和适用的 Ruff 检查均通过，
+   才能提交该功能的 Git checkpoint。
+
+适用示例：SQLite 使用真实临时数据库文件；Qdrant 使用真实 Docker 或 embedded
+实例和隔离 collection；LLM、嵌入、MinerU 等使用真实配置、真实模型或真实 API。
+纯函数可仅使用单元测试，但应在调用它的真实链路 Demo 中得到覆盖。
+
 ## 已完成的验证
 
 - 已确认基准工作区是无 Git 历史的源码快照。
@@ -63,6 +84,8 @@
 - 用户尚未提交 `src/paper_rag/store/` 与 `tests/test_sqlite_store.py`。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 - 下一步为 Qdrant 适配器编写纯逻辑测试契约，不要求先启动 Docker 服务。
+- Qdrant 适配器的固定顺序：边界测试 → `qdrant_store.py` → 真实 Qdrant Demo →
+  无 mock 集成测试；Demo 与集成测试均不得碰正式 `paper_chunks` collection。
 
 ## Git 状态说明
 

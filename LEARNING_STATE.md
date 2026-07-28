@@ -2,12 +2,12 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-28（P3 存储初始化 checkpoint 已建立）
+- 上下文恢复点：2026-07-29（本地与 URL 采集 checkpoint 已建立）
 - 当前阶段：P4（采集、解析和切块）
-- 当前课次：P4.1（采集器抽象契约）
-- 上一个确认完成文件：`tests/test_init_store_real.py`
-- 当前待处理事项：创建 `tests/test_ingest_sources.py`，先定义 `PaperSource` 契约
-- 契约测试确认 RED 后的下一个文件：`src/paper_rag/ingest/sources.py`
+- 当前课次：P4.4（arXiv 采集）
+- 上一个确认完成文件：`tests/test_url_source_real.py`
+- 当前待处理事项：由助手创建 `tests/test_arxiv_source.py`，先定义 arXiv 采集边界
+- 边界测试确认 RED 后的下一个文件：`src/paper_rag/ingest/arxiv_source.py`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -26,8 +26,10 @@
 
 ## 协作规则
 
-- 用户负责创建/修改所有项目文件，并亲自运行安装、测试、服务和 Git 命令。
-- 除非用户明确要求助手执行某项操作，否则助手只提供代码、命令、预期结果和讲解。
+- 用户负责创建/修改 `src/paper_rag/` 下的正式功能文件，并执行所有 Git 命令。
+- 助手直接创建/修改测试文件和 `scripts/demo_*.py`，无需逐次申请写入权限；助手不得
+  代写正式功能文件。
+- 用户亲自运行安装、测试、Demo 和服务命令，除非明确要求助手代为执行。
 - 助手可在用户明确要求“更新进度”时维护并单独提交本文件，但不得提交其他文件。
 - 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
 - Git message 使用 Conventional Commits：`<type>(<scope>): <中文摘要>`。
@@ -114,14 +116,21 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   幂等行为；无 mock 的 `tests/test_init_store_real.py` 已纳入初始化 checkpoint。
 - 存储初始化文件已提交为 `6d0b8e2 feat(store): 实现存储初始化入口与真实验收`，P3
   阶段结束，课程进入 P4。
+- `src/paper_rag/ingest/sources.py` 已建立 `PaperSource.fetch()` 抽象契约；接口测试通过。
+- `src/paper_rag/ingest/local_source.py` 已完成：使用真实本地 PDF 验证内容哈希 ID、
+  `raw.pdf`、`meta.json`、`source.txt` 和重复采集幂等性；边界测试 4 项及无 mock
+  集成测试均通过，并提交为 `71d1b95 feat(ingest): 实现本地PDF采集与真实验收`。
+- `src/paper_rag/ingest/url_source.py` 已完成：边界测试通过 4 项；真实 Demo 与无 mock
+  集成测试均直接采集 ACL Anthology 的
+  `https://aclanthology.org/2025.acl-long.426.pdf`，验证公网 HTTPS 下载、PDF 有效性、
+  内容哈希 ID 和标准落盘，并提交为
+  `9644520 feat(ingest): 实现PDF URL采集与真实验收`。
 
 ## 待处理问题
 
-- 当前工作区中的 `src/paper_rag/store/sqlite_store.py` 与 `tests/test_sqlite_store.py`
-  修改不属于本次课程状态提交，必须保留且不得混入后续 checkpoint。
-- 原定从 `src/paper_rag/parse/__init__.py` 开始 P4 的顺序已取消；当前只完成了采集后的
-  标准化数据契约和去重规则，尚未实现实际采集，必须按“P4 固化顺序”补齐。
+- 下一项是 arXiv 真实采集；完成 arXiv、OpenAlex 和 Semantic Scholar 前不得进入解析。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
+- `demo-local-data/` 与 `demo-url-data/` 是用户选择保留的真实采集结果，不得纳入 Git。
 
 ## Git 状态说明
 
@@ -137,6 +146,8 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `1262c23 chore(style): 修正注释中的易混淆标点`
 - `7d86734 feat(store): 实现 Qdrant 向量存储与真实验收`
 - `6d0b8e2 feat(store): 实现存储初始化入口与真实验收`
+- `71d1b95 feat(ingest): 实现本地PDF采集与真实验收`
+- `9644520 feat(ingest): 实现PDF URL采集与真实验收`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

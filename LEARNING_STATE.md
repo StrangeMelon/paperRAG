@@ -2,12 +2,12 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-28（SQLite 存储实现完成）
+- 上下文恢复点：2026-07-28（存储初始化边界测试完成）
 - 当前阶段：P3（SQLite + Qdrant 双存储）
-- 当前课次：P3.2（SQLite 元数据存储）
-- 上一个确认完成文件：`src/paper_rag/store/sqlite_store.py`
-- 当前待处理文件：`tests/test_qdrant_store.py`
-- Qdrant 测试契约完成后的下一个文件：`src/paper_rag/store/qdrant_store.py`
+- 当前课次：P3.4（存储初始化入口）
+- 上一个确认完成文件：`scripts/init_store.py`
+- 当前待处理事项：真实运行 `scripts/init_store.py` 两次验证幂等性
+- 真实初始化 Demo 完成后的下一个文件：`tests/test_init_store_real.py`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -43,9 +43,10 @@
    真实服务、真实数据和公共 API，逐步打印数据流与结果，并通过断言和非零退出码
    表示失败。Demo 必须使用隔离的临时数据或专用 collection，并负责清理，不能污染
    正式运行数据。
-4. **真实集成测试**：新增无 mock 的 `tests/integration/test_*.py`，验证与 Demo 相同
-   的关键不变量。使用 `uv run pytest -vv -s <目标文件>` 单独运行，以显示每个用例和
-   输出；服务、模型或密钥未准备好时必须明确失败，不能 skip 后宣称验收完成。
+4. **真实集成测试**：新增无 mock 的 `tests/test_*_real.py`（也可放在
+   `tests/integration/`），验证与 Demo 相同的关键不变量。使用
+   `uv run pytest -vv -s <目标文件>` 单独运行，以显示每个用例和输出；服务、模型或
+   密钥未准备好时必须明确失败，不能 skip 后宣称验收完成。
 5. **checkpoint**：只有边界测试、真实 Demo、真实集成测试和适用的 Ruff 检查均通过，
    才能提交该功能的 Git checkpoint。
 
@@ -76,16 +77,20 @@
   ingest 步骤与跨来源查重、Section/Chunk 快照及旧库迁移。
 - `tests/test_sqlite_store.py` 最终通过（9 passed）；全量 `uv run pytest -q`
   通过，SQLite 实现与测试的聚焦 Ruff 检查通过。
+- `src/paper_rag/store/qdrant_store.py` 边界测试通过（12 passed）；真实 Docker
+  Qdrant Demo 已验证 1024 维向量写入、Cosine 排序、metadata 过滤、按论文删除和
+  collection 清理；无 mock 的 `tests/test_qdrant_store_real.py` 已通过。
+- Qdrant 真实 Demo 暴露并修复了 Loguru 不解析 `%s` 的日志格式问题；修复后 Demo、
+  边界测试与 Ruff 均重新通过。
+- `scripts/init_store.py` 与 `tests/test_init_store.py` 已完成，边界测试通过（4 passed）；
+  其中 SQLite 用真实临时数据库验证，Qdrant collection 与主流程顺序使用边界 fake。
 
 ## 待处理问题
 
-- `src/paper_rag/utils/paths.py` 的一个空行含多余空格，尚未通过全量 Ruff；用户需
-  删除该空格并单独决定是否提交，助手不得擅自覆盖。
-- SQLite 存储 checkpoint 已提交：`24bd07b feat(store): 实现SQLite 元数据与内容存储`。
+- `scripts/init_store.py` 与 `tests/test_init_store.py` 尚未提交。
+- 必须真实运行 `uv run python scripts/init_store.py` 两次并确认第二次不重复创建；
+  随后编写无 mock 的 `tests/test_init_store_real.py`，通过后才能建立初始化 checkpoint。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
-- 下一步为 Qdrant 适配器编写纯逻辑测试契约，不要求先启动 Docker 服务。
-- Qdrant 适配器的固定顺序：边界测试 → `qdrant_store.py` → 真实 Qdrant Demo →
-  无 mock 集成测试；Demo 与集成测试均不得碰正式 `paper_chunks` collection。
 
 ## Git 状态说明
 
@@ -98,6 +103,8 @@
 - `6d8d2ca feat(ingest): 实现论文采集去重判断`
 - `2f510c3 chore(style): 规范基础工具与测试文件格式`
 - `24bd07b feat(store): 实现SQLite 元数据与内容存储`
+- `1262c23 chore(style): 修正注释中的易混淆标点`
+- `7d86734 feat(store): 实现 Qdrant 向量存储与真实验收`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

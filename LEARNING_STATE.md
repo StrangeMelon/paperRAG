@@ -81,7 +81,7 @@
 
 - `src/paper_rag/utils/paths.py` 的一个空行含多余空格，尚未通过全量 Ruff；用户需
   删除该空格并单独决定是否提交，助手不得擅自覆盖。
-- 用户尚未提交 `src/paper_rag/store/` 与 `tests/test_sqlite_store.py`。
+- SQLite 存储 checkpoint 已提交：`24bd07b feat(store): 实现SQLite 元数据与内容存储`。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 - 下一步为 Qdrant 适配器编写纯逻辑测试契约，不要求先启动 Docker 服务。
 - Qdrant 适配器的固定顺序：边界测试 → `qdrant_store.py` → 真实 Qdrant Demo →
@@ -97,7 +97,8 @@
 - `d8ce9a5 feat(ingest): 定义论文采集的数据模型`
 - `6d8d2ca feat(ingest): 实现论文采集去重判断`
 - `2f510c3 chore(style): 规范基础工具与测试文件格式`
-- SQLite checkpoint 尚未提交；课程状态提交不得包含业务文件。
+- `24bd07b feat(store): 实现SQLite 元数据与内容存储`
+- 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新
 

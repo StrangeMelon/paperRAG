@@ -1,6 +1,6 @@
 """路径辅助函数的行为契约测试。"""
 
-from __future__ import annotations  # 让类型注解延迟解析，减少运行时依赖和前向引用问题
+from __future__ import annotations  # 让类型注解延迟解析, 减少运行时依赖和前向引用问题
 
 import importlib  # 通过字符串动态导入模块
 from pathlib import Path  # 面向对象地处理文件路径。

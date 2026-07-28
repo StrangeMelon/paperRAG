@@ -1,10 +1,10 @@
 """
 用于在本地 Hugging Face 缓存中寻找已完整下载的模型快照。
-它不会下载模型、不会设置 HF_HOME 等环境变量；
-它的作用是把模型名，例如 BAAI/bge-m3，转换为本地快照目录
+它不会下载模型、不会设置 HF_HOME 等环境变量;
+它的作用是把模型名, 例如 BAAI/bge-m3, 转换为本地快照目录
 
-这样 src/paper_rag/embed/bge_m3.py:32 和 src/paper_rag/retrieve/rerank.py:33 加载模型时可以直接传本地路径，
-避免在离线演示、测试或网络不稳定时，transformers / huggingface_hub 试图联网检查或下载模型。
+这样 src/paper_rag/embed/bge_m3.py:32 和 src/paper_rag/retrieve/rerank.py:33 加载模型时可以直接传本地路径,
+避免在离线演示、测试或网络不稳定时, transformers / huggingface_hub 试图联网检查或下载模型。
 """
 
 
@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 
 
-# 输入是一个候选快照目录，输出是布尔值，表示其中是否有完整模型权重
+# 输入是一个候选快照目录, 输出是布尔值, 表示其中是否有完整模型权重
 def _has_model_weights(snapshot: Path) -> bool:
     direct_weights = (
         "model.safetensors",
@@ -42,8 +42,8 @@ def _has_model_weights(snapshot: Path) -> bool:
             return True
     return False
 
-# 找到完整缓存时，返回本地快照目录字符串；
-# 找不到时，返回原始模型名字符串
+# 找到完整缓存时, 返回本地快照目录字符串;
+# 找不到时, 返回原始模型名字符串
 def resolve_cached_snapshot(model_name: str, cache_dir: str | Path) -> str:
     """Return a local snapshot path when available, otherwise ``model_name``.
 

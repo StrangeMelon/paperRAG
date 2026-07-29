@@ -2,14 +2,13 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-29（arXiv 与 OpenAlex 采集 checkpoint 已建立）
+- 上下文恢复点：2026-07-29（Semantic Scholar 边界实现已提交，真实验收暂缓）
 - 当前阶段：P4（采集、解析和切块）
-- 当前课次：P4.6（Semantic Scholar 采集）
-- 上一个确认完成文件：`tests/test_openalex_source_real.py`
-- 当前待处理事项：由助手创建 `tests/test_semantic_scholar_source.py`，先定义
-  Semantic Scholar 采集边界
-- 边界测试确认 RED 后的下一个文件：
-  `src/paper_rag/ingest/semantic_scholar_source.py`
+- 当前课次：P4.7（解析包入口）
+- 上一个确认完成文件：`tests/test_semantic_scholar_source.py`
+- 当前待处理事项：讲解并创建 `src/paper_rag/parse/__init__.py`
+- Semantic Scholar 恢复点：取得 API key 后运行
+  `scripts/demo_semantic_scholar_source.py`，再创建并运行无 mock 真实集成测试
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -61,6 +60,10 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 
 阶段门禁：五类具体采集器的真实 Demo、无 mock 集成测试和 Ruff 检查没有全部通过前，
 不得把当前课次推进到解析；解析未完成真实验收前，不得进入切块。
+
+临时门禁例外：2026-07-29 用户暂时没有 Semantic Scholar API key，并明确要求先跳过。
+因此课程可以继续解析，但 Semantic Scholar 不能标记为完整 checkpoint；在最终后端验收前
+必须回补真实 Demo、无 mock 集成测试、Ruff 检查和独立真实验收提交。
 
 ## 强制验收协议
 
@@ -139,11 +142,19 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   `primary_location.pdf_url`、`locations[].pdf_url`，同时保留落地页作为元数据 URL，
   不再错误下载 DOI 页面。OpenAlex 已提交为
   `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`。
+- `src/paper_rag/ingest/semantic_scholar_source.py` 已完成边界实现：支持 arXiv URL、
+  `arxiv:`、`doi:`、裸 DOI 和 S2 Paper ID；根据 API 返回的 ArXiv、DOI、S2 ID
+  优先级生成稳定 `paper_id`，映射标准元数据，并支持开放 PDF 下载与已有 PDF 复用。
+- `tests/test_semantic_scholar_source.py` 边界测试通过（4 passed），覆盖 API key 请求头、
+  标识符归一化、metadata-only、S2 ID 降级和 PDF 幂等复用；已提交为
+  `e45e6ac feat(ingest): 实现 Semantic Scholar 采集边界`。
 
 ## 待处理问题
 
-- 下一项是 Semantic Scholar 真实采集；完成其边界测试、生产实现、真实 Demo、无 mock
-  集成测试和 Ruff 检查前不得进入解析。
+- 下一项按用户授权的临时例外进入解析包入口 `src/paper_rag/parse/__init__.py`。
+- Semantic Scholar 真实验收仍未完成：缺少 API key；
+  `scripts/demo_semantic_scholar_source.py` 已创建但未提交，且尚未创建无 mock 的
+  `tests/test_semantic_scholar_source_real.py`。不得将该采集源标记为完整完成。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 - `demo-local-data/`、`demo-url-data/`、`demo-arxiv-data/` 和
   `demo-openalex-data/` 是用户选择保留的真实采集结果，不得纳入 Git。
@@ -166,6 +177,7 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `9644520 feat(ingest): 实现PDF URL采集与真实验收`
 - `698d611 feat(ingest): 实现 arXiv PDF 采集器与真实验收`
 - `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`
+- `e45e6ac feat(ingest): 实现 Semantic Scholar 采集边界`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

@@ -2,12 +2,14 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-29（本地与 URL 采集 checkpoint 已建立）
+- 上下文恢复点：2026-07-29（arXiv 与 OpenAlex 采集 checkpoint 已建立）
 - 当前阶段：P4（采集、解析和切块）
-- 当前课次：P4.4（arXiv 采集）
-- 上一个确认完成文件：`tests/test_url_source_real.py`
-- 当前待处理事项：由助手创建 `tests/test_arxiv_source.py`，先定义 arXiv 采集边界
-- 边界测试确认 RED 后的下一个文件：`src/paper_rag/ingest/arxiv_source.py`
+- 当前课次：P4.6（Semantic Scholar 采集）
+- 上一个确认完成文件：`tests/test_openalex_source_real.py`
+- 当前待处理事项：由助手创建 `tests/test_semantic_scholar_source.py`，先定义
+  Semantic Scholar 采集边界
+- 边界测试确认 RED 后的下一个文件：
+  `src/paper_rag/ingest/semantic_scholar_source.py`
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
@@ -125,12 +127,26 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   `https://aclanthology.org/2025.acl-long.426.pdf`，验证公网 HTTPS 下载、PDF 有效性、
   内容哈希 ID 和标准落盘，并提交为
   `9644520 feat(ingest): 实现PDF URL采集与真实验收`。
+- `src/paper_rag/ingest/arxiv_source.py` 已完成：边界测试、交互式真实 arXiv Demo 和
+  无 mock 公网集成测试均通过；验证 arXiv ID 与版本归一化、稳定 `paper_id`、真实
+  元数据、PDF 下载、标准落盘和重复采集复用，并提交为
+  `698d611 feat(ingest): 实现 arXiv PDF 采集器与真实验收`。
+- `src/paper_rag/ingest/openalex_source.py` 已完成：边界测试、交互式真实 OpenAlex Demo
+  和无 mock 公网集成测试均通过。真实测试分别验证 metadata-only 与 metadata+PDF
+  两条路径，并使用 PyMuPDF 打开 J-STAGE 的真实 PDF。
+- OpenAlex 真实测试发现 `open_access.oa_url` 可能是 DOI 落地页而非 PDF；已通过新增
+  RED 用例修正为依次读取 `best_oa_location.pdf_url`、
+  `primary_location.pdf_url`、`locations[].pdf_url`，同时保留落地页作为元数据 URL，
+  不再错误下载 DOI 页面。OpenAlex 已提交为
+  `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`。
 
 ## 待处理问题
 
-- 下一项是 arXiv 真实采集；完成 arXiv、OpenAlex 和 Semantic Scholar 前不得进入解析。
+- 下一项是 Semantic Scholar 真实采集；完成其边界测试、生产实现、真实 Demo、无 mock
+  集成测试和 Ruff 检查前不得进入解析。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
-- `demo-local-data/` 与 `demo-url-data/` 是用户选择保留的真实采集结果，不得纳入 Git。
+- `demo-local-data/`、`demo-url-data/`、`demo-arxiv-data/` 和
+  `demo-openalex-data/` 是用户选择保留的真实采集结果，不得纳入 Git。
 
 ## Git 状态说明
 
@@ -148,6 +164,8 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `6d0b8e2 feat(store): 实现存储初始化入口与真实验收`
 - `71d1b95 feat(ingest): 实现本地PDF采集与真实验收`
 - `9644520 feat(ingest): 实现PDF URL采集与真实验收`
+- `698d611 feat(ingest): 实现 arXiv PDF 采集器与真实验收`
+- `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,7 @@ class PaperMeta(BaseModel):
     doi: str | None = None
     arxiv_id: str | None = None
     abstract: str | None = None
+    language: Literal["zh", "en"] | None = None
     urls: list[str] = Field(default_factory=list)
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source: str = "unknown"

@@ -34,7 +34,9 @@ def test_paper_meta_supports_minimal_metadata() -> None:
     assert meta.year is None
     assert meta.venue is None
     assert meta.source == "unknown"
+    assert meta.language is None
     assert before_creation <= meta.fetched_at <= after_creation
+
 
 # 列表和字典默认值不能被不同论文对象共享
 def test_mutable_defaults_are_not_shared() -> None:
@@ -49,6 +51,7 @@ def test_mutable_defaults_are_not_shared() -> None:
     assert second.authors == []
     assert second.urls == []
     assert second.extra == {}
+
 
 # FetchResult 将论文元数据与本地 PDF 路径组合起来
 def test_fetch_result_serializes_nested_metadata() -> None:
@@ -77,6 +80,7 @@ def test_fetch_result_serializes_nested_metadata() -> None:
     assert serialized["meta"]["extra"] == {"citation_count": 12}
     assert serialized["pdf_path"] == "/tmp/example.pdf"
 
+
 # 缺少 paper_id 或 title 的元数据时, Pydantic必须立即拒绝数据
 def test_paper_meta_requires_identity_and_title() -> None:
     schema = _schema_module()
@@ -86,3 +90,28 @@ def test_paper_meta_requires_identity_and_title() -> None:
 
     with pytest.raises(ValidationError):
         schema.PaperMeta(paper_id="paper:missing-title")
+
+
+@pytest.mark.parametrize("language", ["zh", "en", None])
+def test_paper_meta_accepts_supported_document_languages(
+    language: str | None,
+) -> None:
+    schema = _schema_module()
+    meta = schema.PaperMeta(
+        paper_id="paper:language",
+        title="Language Paper",
+        language=language,
+    )
+
+    assert meta.language == language
+
+
+def test_paper_meta_rejects_unknown_document_language() -> None:
+    schema = _schema_module()
+
+    with pytest.raises(ValidationError):
+        schema.PaperMeta(
+            paper_id="paper:language",
+            title="Language Paper",
+            language="ch",
+        )

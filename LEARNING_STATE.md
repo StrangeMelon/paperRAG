@@ -2,12 +2,13 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-30（MinerU Doctor 边界测试已完成，真实模型尚未下载）
+- 上下文恢复点：2026-07-30（双语 OCR 设计已确认，实施计划待提交，真实模型尚未下载）
 - 当前阶段：P4（采集、解析和切块）
-- 当前课次：P4.9（MinerU 本地 GPU OCR 解析器）
-- 上一个确认完成文件：`config/magic-pdf.json`
-- 当前待处理事项：创建并讲解 `scripts/mineru_doctor.py`，运行真实 Doctor，
-  根据报告准备 OCR 语言和真实模型权重
+- 当前课次：P4.9（MinerU 本地 GPU OCR 解析器与中英文语言路由）
+- 上一个确认完成文件：`scripts/mineru_doctor.py`
+- 当前待处理事项：先提交双语 OCR 实施计划；随后执行计划 Task 1，把错误的固定 `en`
+  测试契约改为 `auto`，扩展配置值域测试，再由用户修改 `src/paper_rag/config.py` 和
+  `config/default.yaml`
 - Semantic Scholar 恢复点：取得 API key 后运行
   `scripts/demo_semantic_scholar_source.py`，再创建并运行无 mock 真实集成测试
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
@@ -25,6 +26,15 @@
 - 以运行行为、公开接口、测试和评测为等价标准，不要求源文件字节级一致。
 - MinerU 生产默认使用 `.venv/bin/magic-pdf`、强制 `ocr` 模式和 CUDA GPU；真实模型
   必须下载到重写项目自己的 `data/index/mineru_models/`，不得引用原项目模型目录。
+- 论文集合同时包含中文和英文论文；纯扫描 PDF 由人工在同目录 `meta.json` 顶层标注
+  `language: "zh" | "en"`，普通 PDF 不要求人工标注。
+- 应用配置使用 `mineru.lang: auto | ch | en`；`auto` 模式优先读取人工元数据，其次使用
+  PyMuPDF 采样文字判断，无法判断时回退 PaddleOCR 中英文通用模型 `ch`。
+- 领域元数据使用 `zh/en`，只在 MinerU 适配边界映射为供应商参数 `ch/en`；自动模式必须
+  准备中英文两套 OCR 权重。
+- 语言判断失败不能终止流程；英文权重缺失但中文权重完整时降级到 `ch`。MinerU 失败时
+  普通文字 PDF 可降级 PyMuPDF；扫描件仍无正文时记录单篇失败，批处理继续下一篇，并且
+  空结果不得伪装成成功。
 - 为兼容 `uv` 的通用解析，项目 Python 支持范围为 `>=3.10,<3.14`，并在
   `[tool.uv]` 中允许 MinerU 所需的预发布依赖。
 
@@ -176,18 +186,35 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - MinerU Doctor 的第四段边界测试已追加到 `tests/test_mineru_local.py`，覆盖依赖导入、
   模型根目录、布局权重、按语言选择的 OCR 检测/识别权重、CLI 版本和报告汇总；用户
   已确认最终 GREEN 为 `23 passed, 13 warnings`。
+- `scripts/mineru_doctor.py` 已按五个 TDD 切片完成：JSON 输出、人类可读报告、
+  `--strict` 退出码、`--try-parse` 成功/失败结构，以及终端试解析结果。用户已确认
+  `tests/test_mineru_doctor_script.py` 全部通过（7 passed），Ruff 与 `--help` 入口也已通过。
+- 真实 Doctor 已运行：CLI、完整 MinerU 依赖、OpenCV、配置文件和 CLI 版本检查通过；
+  因模型目录不存在及 OCR 语言尚未配置而准确返回 `ok: False`，`--strict` 退出码为 `1`。
+- 用户补充语料为中英文混合集合，并确认纯扫描件有人工语言元数据、普通 PDF 由系统自动
+  判断；无法判断时使用 `ch`，且采用单篇失败隔离和 PyMuPDF 降级策略。
+- 双语设计文档
+  `docs/superpowers/specs/2026-07-30-bilingual-mineru-language-routing-design.md` 已确认并提交为
+  `e12284d docs(parse): 设计中英文 OCR 语言路由与降级策略`。
+- 双语实施计划
+  `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md` 已生成并自审：共
+  15 个逐文件任务，固定官方模型仓库修订
+  `a4f6a8d29a4d96730f90ea174a9322e842b93552`，明确七个布局、LayoutReader 和中英文 OCR
+  文件；占位符扫描无匹配，`git diff --check` 通过，但计划文件尚未提交。
 
 ## 待处理问题
 
-- 当前首先创建 `scripts/mineru_doctor.py`，把 `diagnose()` 结果以人类可读或 JSON 形式
-  输出，并使用真实 `.venv/bin/magic-pdf` 环境检查当前机器。
+- 当前首先提交
+  `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md`，规范提交信息为
+  `docs(parse): 规划中英文 OCR 语言路由实施步骤`。
+- 实施计划 Task 1 的首个 RED 是把 `tests/test_mineru_gpu_config.py` 中临时的固定 `en`
+  期待改为 `auto`，并在 `tests/test_config.py` 增加 `auto/ch/en` 值域测试。当前未跟踪测试
+  文件仍包含临时 `en` 期待，不得在修正前提交。
 - `data/index/mineru_models/` 中尚未下载任何真实 MinerU 模型。必须在 Doctor 完成后，
-  根据 Doctor 输出和最终 OCR 语言下载 `Layout/YOLO`、`Layout/LayoutReader` 与
-  `OCR/paddleocr_torch` 所需权重；模型下载完成前不得宣称 GPU OCR 可用。
-- `config/default.yaml` 当前 `mineru.lang: null`。已安装的 `magic-pdf 1.3.12` 会按语言
-  选择 OCR 检测/识别权重，因此在下载前必须确定默认语料语言（英文论文建议 `en`）；
-  Doctor 已将缺少 OCR 语言视为失败项；在真实模型下载前需要确定默认语料语言，英文
-  论文建议使用 `en`。
+  按固定官方修订下载 `Layout/YOLO`、`Layout/LayoutReader` 及 `ch/en` 四个 OCR 权重；
+  模型下载完成前不得宣称 GPU OCR 可用。
+- `config/default.yaml` 当前仍是 `mineru.lang: null`；必须按 Task 1 改成应用层
+  `mineru.lang: auto`，且不得把字符串 `auto` 原样传给 `magic-pdf`。
 - 真实 MinerU Demo 与无 mock 集成测试尚未运行；必须在模型准备、Doctor 通过后使用
   用户选择的真实 PDF 执行，并同时确认 Markdown/图片/layout 产物和真实 GPU 使用。
 - Semantic Scholar 真实验收仍未完成：缺少 API key；
@@ -198,6 +225,7 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   `demo-openalex-data/`、`demo-pymupdf-data/` 是用户选择保留的真实结果，不得纳入 Git。
 - 当前解析实现、测试、Demo、GPU/OCR 配置和用户运行数据均尚未形成业务 Git
   checkpoint；课程状态提交不得顺带纳入这些文件。
+- 双语实施计划尚未提交；本次课程状态提交不得顺带提交该计划文件。
 
 ## Git 状态说明
 
@@ -218,6 +246,7 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `698d611 feat(ingest): 实现 arXiv PDF 采集器与真实验收`
 - `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`
 - `e45e6ac feat(ingest): 实现 Semantic Scholar 采集边界`
+- `e12284d docs(parse): 设计中英文 OCR 语言路由与降级策略`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

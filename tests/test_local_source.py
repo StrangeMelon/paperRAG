@@ -93,6 +93,21 @@ def test_fetch_copies_pdf_and_persists_standard_metadata(
         f"source=local\nquery={source_pdf}\n"
     )
 
+    # 人工在 meta.json 顶层补写语言标注后, 再次采集同一 PDF 必须保留该标注,
+    # 而不是用来源返回的空值覆盖它。
+    meta_path = target_dir / "meta.json"
+    payload = json.loads(meta_path.read_text(encoding="utf-8"))
+    payload["language"] = "zh"
+    meta_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    second = module.LocalSource().fetch(str(source_pdf))
+
+    assert second.meta.language == "zh"
+    assert json.loads(meta_path.read_text(encoding="utf-8"))["language"] == "zh"
+
 # 如果在 LocalSource 构造函数中显式传入了 title 参数, 那么 fetch() 返回的 PaperMeta.title 必须使用这个显式标题, 而不是默认的文件名
 def test_explicit_title_overrides_the_filename(
     monkeypatch: pytest.MonkeyPatch,

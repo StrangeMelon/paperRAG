@@ -6,7 +6,6 @@ OpenAlex 主要用于补充论文元数据。
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ import httpx
 from ..utils.ids import make_paper_id, normalize_doi
 from ..utils.logger import get_logger
 from ..utils.paths import paper_dir
+from .metadata import persist_paper_meta
 from .schema import FetchResult, PaperMeta
 from .sources import PaperSource
 
@@ -76,6 +76,8 @@ class OpenAlexSource(PaperSource):
 
         primary_location = data.get("primary_location") or {}
         source = primary_location.get("source") or {}
+        reported_language = data.get("language")
+        language = reported_language if reported_language in {"zh", "en"} else None
 
         meta = PaperMeta(
             paper_id=paper_id,
@@ -87,6 +89,7 @@ class OpenAlexSource(PaperSource):
             abstract=_decode_abstract(
                 data.get("abstract_inverted_index")
             ),
+            language=language,
             urls=_unique_urls(
                 pdf_url,
                 landing_url,
@@ -190,22 +193,16 @@ def _persist_meta(
     target: Path,
     meta: PaperMeta,
     source_query: str,
-) -> None:
+) -> PaperMeta:
     """持久化标准元数据和原始采集参数。"""
 
-    (target / "meta.json").write_text(
-        json.dumps(
-            meta.model_dump(mode="json"),
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    meta = persist_paper_meta(target, meta)
 
     (target / "source.txt").write_text(
         f"source={meta.source}\nquery={source_query}\n",
         encoding="utf-8",
     )
+    return meta
 
 
 def _decode_abstract(

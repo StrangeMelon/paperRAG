@@ -2,13 +2,16 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-30（双语 OCR 设计已确认，实施计划待提交，真实模型尚未下载）
+- 上下文恢复点：2026-07-31（双语 OCR 实施计划已提交，Task 8 已提交，Task 9
+  语言决策 RED 测试已创建，真实模型尚未下载）
 - 当前阶段：P4（采集、解析和切块）
 - 当前课次：P4.9（MinerU 本地 GPU OCR 解析器与中英文语言路由）
-- 上一个确认完成文件：`scripts/mineru_doctor.py`
-- 当前待处理事项：先提交双语 OCR 实施计划；随后执行计划 Task 1，把错误的固定 `en`
-  测试契约改为 `auto`，扩展配置值域测试，再由用户修改 `src/paper_rag/config.py` 和
-  `config/default.yaml`
+- 上一个确认完成文件：`src/paper_rag/ingest/semantic_scholar_source.py`
+- 当前待处理事项：执行实施计划 Task 9。助手已创建
+  `tests/test_parse_language.py`；下一步由用户运行
+  `uv run pytest -vv -s tests/test_parse_language.py` 观察
+  `ModuleNotFoundError: paper_rag.parse.language` RED，然后由用户实现
+  `src/paper_rag/parse/language.py`，再运行 GREEN 与 Ruff。
 - Semantic Scholar 恢复点：取得 API key 后运行
   `scripts/demo_semantic_scholar_source.py`，再创建并运行无 mock 真实集成测试
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
@@ -234,35 +237,64 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   `docs/superpowers/specs/2026-07-30-bilingual-mineru-language-routing-design.md` 已确认并提交为
   `e12284d docs(parse): 设计中英文 OCR 语言路由与降级策略`。
 - 双语实施计划
-  `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md` 已生成并自审：共
-  15 个逐文件任务，固定官方模型仓库修订
-  `a4f6a8d29a4d96730f90ea174a9322e842b93552`，明确七个布局、LayoutReader 和中英文 OCR
-  文件；占位符扫描无匹配，`git diff --check` 通过，但计划文件尚未提交。
+  `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md` 已生成、自审并提交为
+  `ddff85b docs(parse): 规划中英文 OCR 语言路由实施步骤`。计划共 15 个逐文件任务，
+  固定官方模型仓库修订 `a4f6a8d29a4d96730f90ea174a9322e842b93552`，明确七个布局、
+  LayoutReader 和中英文 OCR 文件。
+- Task 1 已提交为 `13dd3a6 feat(config): 支持 MinerU OCR 语言自动路由`：
+  `mineru.lang` 配置值域为 `auto | ch | en`，默认值改为 `auto`。
+- Task 2 已提交为 `8afa910 feat(ingest): 为论文元数据添加语言字段`：
+  `PaperMeta.language` 支持领域语言 `zh/en/None` 并拒绝供应商值 `ch`。
+- Task 3 已提交为 `381f748 feat(ingest): 保留论文人工语言标注`：
+  新增 `src/paper_rag/ingest/metadata.py`，统一写入 `meta.json` 并保留已有人工语言。
+- Task 4 已提交为 `3931b6a refactor(ingest): 统一本地论文元数据持久化`：
+  本地 PDF 采集器改用统一元数据持久化函数，重复采集保留人工语言。
+- Task 5 已提交为 `e193b7f refactor(ingest): 统一 URL 论文元数据持久化`：
+  URL PDF 采集器改用统一元数据持久化函数。
+- Task 7 已提交为 `d8b2673 refactor(ingest): 保留 OpenAlex 论文语言元数据`：
+  OpenAlex 采集器映射可信 `zh/en` 语言并保留人工标注。
+- Task 8 已提交为 `7a88b37 refactor(ingest): 统一 Semantic Scholar 元数据持久化`：
+  Semantic Scholar 采集器改用统一元数据持久化函数；真实 API 验收仍等待 API key。
+- Task 9 的 RED 测试文件 `tests/test_parse_language.py` 已由助手创建但尚未提交。该测试
+  覆盖元数据优先、英文文本、中文文本、空白扫描 fallback、损坏元数据、损坏 PDF、
+  强制 `ch/en` 和未知配置值拒绝。
 
 ## 待处理问题
 
-- 当前首先提交
-  `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md`，规范提交信息为
-  `docs(parse): 规划中英文 OCR 语言路由实施步骤`。
-- 实施计划 Task 1 的首个 RED 是把 `tests/test_mineru_gpu_config.py` 中临时的固定 `en`
-  期待改为 `auto`，并在 `tests/test_config.py` 增加 `auto/ch/en` 值域测试。当前未跟踪测试
-  文件仍包含临时 `en` 期待，不得在修正前提交。
+- 当前首先处理 Task 9：运行 `uv run pytest -vv -s tests/test_parse_language.py` 观察 RED；
+  由用户实现 `src/paper_rag/parse/language.py` 后运行
+  `uv run pytest -vv -s tests/test_parse_language.py` 和
+  `uv run ruff check src/paper_rag/parse/language.py tests/test_parse_language.py`；通过后提交
+  `feat(parse): 实现中英文 OCR 语言自动判断`。
+- `src/paper_rag/ingest/arxiv_source.py` 仍有未提交的 Task 6 元数据持久化迁移 diff；
+  此文件不要被 Task 9 提交顺带纳入。先前真实 arXiv 验收卡顿应作为独立网络超时修复
+  处理，不要混入语言决策模块提交。
 - `data/index/mineru_models/` 中尚未下载任何真实 MinerU 模型。必须在 Doctor 完成后，
   按固定官方修订下载 `Layout/YOLO`、`Layout/LayoutReader` 及 `ch/en` 四个 OCR 权重；
   模型下载完成前不得宣称 GPU OCR 可用。
-- `config/default.yaml` 当前仍是 `mineru.lang: null`；必须按 Task 1 改成应用层
-  `mineru.lang: auto`，且不得把字符串 `auto` 原样传给 `magic-pdf`。
 - 真实 MinerU Demo 与无 mock 集成测试尚未运行；必须在模型准备、Doctor 通过后使用
   用户选择的真实 PDF 执行，并同时确认 Markdown/图片/layout 产物和真实 GPU 使用。
 - Semantic Scholar 真实验收仍未完成：缺少 API key；
   `scripts/demo_semantic_scholar_source.py` 已创建但未提交，且尚未创建无 mock 的
   `tests/test_semantic_scholar_source_real.py`。不得将该采集源标记为完整完成。
+- 2026-07-31 Task 6 arXiv 真实验收出现外部网络卡顿：
+  `uv run pytest -vv -s tests/test_arxiv_source_real.py` 卡在
+  `[2/5] 查询真实 arXiv API 并下载 PDF` 后的 `ArxivSource().fetch()`。排查结论是
+  通用网络可用，但 arXiv 真实端点不稳定：`export.arxiv.org/api/query` 的部分查询形式
+  会超时，`arxiv` Python 包 4.0.0 内部 `requests.Session.get()` 没有显式 timeout，
+  慢链路会表现为长时间卡住。探针证据：`curl -I --max-time 20
+  'https://export.arxiv.org/api/query?search_query=id:1706.03762'` 超时；
+  `curl -I --max-time 20 'https://export.arxiv.org/api/query?id_list=1706.03762'`
+  返回 200；`arxiv.Client(...).results(Search(id_list=['1706.03762']))` 曾耗时约
+  17 秒才返回；PDF 端点可达但下载偏慢。当前判断：这不是 Task 6 元数据持久化迁移引入的
+  逻辑问题，应单独规划 `fix(ingest): 为 arXiv 真实请求增加超时`，不要混入 Task 6
+  迁移提交。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 - `demo-local-data/`、`demo-url-data/`、`demo-arxiv-data/` 和
   `demo-openalex-data/`、`demo-pymupdf-data/` 是用户选择保留的真实结果，不得纳入 Git。
 - 当前解析实现、测试、Demo、GPU/OCR 配置和用户运行数据均尚未形成业务 Git
-  checkpoint；课程状态提交不得顺带纳入这些文件。
-- 双语实施计划尚未提交；本次课程状态提交不得顺带提交该计划文件。
+  checkpoint；课程状态提交不得顺带纳入这些文件。`tests/test_parse_language.py` 是 Task 9
+  新 RED 测试，后续应只和 `src/paper_rag/parse/language.py` 一起提交。
 
 ## Git 状态说明
 
@@ -284,6 +316,14 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`
 - `e45e6ac feat(ingest): 实现 Semantic Scholar 采集边界`
 - `e12284d docs(parse): 设计中英文 OCR 语言路由与降级策略`
+- `ddff85b docs(parse): 规划中英文 OCR 语言路由实施步骤`
+- `13dd3a6 feat(config): 支持 MinerU OCR 语言自动路由`
+- `8afa910 feat(ingest): 为论文元数据添加语言字段`
+- `381f748 feat(ingest): 保留论文人工语言标注`
+- `3931b6a refactor(ingest): 统一本地论文元数据持久化`
+- `e193b7f refactor(ingest): 统一 URL 论文元数据持久化`
+- `d8b2673 refactor(ingest): 保留 OpenAlex 论文语言元数据`
+- `7a88b37 refactor(ingest): 统一 Semantic Scholar 元数据持久化`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

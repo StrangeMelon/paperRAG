@@ -2,11 +2,13 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-29（Semantic Scholar 边界实现已提交，真实验收暂缓）
+- 上下文恢复点：2026-07-30（MinerU 解析调度已完成边界实现，Doctor 正处于 RED）
 - 当前阶段：P4（采集、解析和切块）
-- 当前课次：P4.7（解析包入口）
-- 上一个确认完成文件：`tests/test_semantic_scholar_source.py`
-- 当前待处理事项：讲解并创建 `src/paper_rag/parse/__init__.py`
+- 当前课次：P4.9（MinerU 本地 GPU OCR 解析器）
+- 上一个确认完成文件：`config/magic-pdf.json`
+- 当前待处理事项：在 `src/paper_rag/parse/mineru_local.py` 中实现
+  `_import_check()` 与 `_model_dir_checks()`，使 Doctor 聚焦测试从
+  `7 failed, 16 passed` 推进到预期的 `5 failed, 18 passed`
 - Semantic Scholar 恢复点：取得 API key 后运行
   `scripts/demo_semantic_scholar_source.py`，再创建并运行无 mock 真实集成测试
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
@@ -22,6 +24,8 @@
 - 所有教学文本使用中文。
 - 使用 `uv` 管理虚拟环境、依赖和 `uv.lock`，不使用 Conda。
 - 以运行行为、公开接口、测试和评测为等价标准，不要求源文件字节级一致。
+- MinerU 生产默认使用 `.venv/bin/magic-pdf`、强制 `ocr` 模式和 CUDA GPU；真实模型
+  必须下载到重写项目自己的 `data/index/mineru_models/`，不得引用原项目模型目录。
 - 为兼容 `uv` 的通用解析，项目 Python 支持范围为 `>=3.10,<3.14`，并在
   `[tool.uv]` 中允许 MinerU 所需的预发布依赖。
 
@@ -148,16 +152,51 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `tests/test_semantic_scholar_source.py` 边界测试通过（4 passed），覆盖 API key 请求头、
   标识符归一化、metadata-only、S2 ID 降级和 PDF 幂等复用；已提交为
   `e45e6ac feat(ingest): 实现 Semantic Scholar 采集边界`。
+- `src/paper_rag/parse/__init__.py` 已创建并通过包入口测试，保持解析后端的延迟导入
+  边界。
+- `src/paper_rag/parse/fallback_pymupdf.py` 已实现：使用真实 PyMuPDF 创建和读取 PDF，
+  按页生成 `paper.md` 与页标记，清理 NUL 字符并保证重复解析稳定；边界测试和允许用户
+  选择本地 PDF 的 `scripts/demo_fallback_pymupdf.py` 已通过真实验收。
+- `src/paper_rag/parse/mineru_local.py` 已完成前三个内部切片：运行时缓存环境、CLI 定位、
+  错误分类与诊断数据结构；MinerU 原始 Markdown/图片/layout 发现和标准化；以及真实
+  `subprocess.run()` 解析调度、超时、非零退出和空产物拒绝。完成第三段时聚焦测试为
+  `16 passed`。
+- `scripts/demo_mineru_local.py` 已创建，支持交互输入本地 PDF、默认强制 OCR、隔离或
+  持久化输出，并检查标准化 Markdown、figures、layout 与原始产物；Ruff 和 `--help`
+  启动检查通过，但尚未运行真实解析。
+- MinerU 依赖已通过
+  `uv sync --extra dev --extra ingest --extra mineru` 安装；实际 CLI 是
+  `.venv/bin/magic-pdf`，安装版本为 `magic-pdf 1.3.12`。
+- 用户已在宿主环境确认 PyTorch `2.13.0+cu130`、CUDA 13.0 可用，并识别到
+  `NVIDIA RTX PRO 6000 Blackwell Workstation Edition`。
+- `config/default.yaml` 已将 MinerU CLI 改为 `magic-pdf`、解析模式改为 `ocr`；
+  `config/magic-pdf.json` 已配置 `device-mode: cuda`、项目内模型目录、
+  `doclayout_yolo`，并保持表格和公式识别关闭。`tests/test_mineru_gpu_config.py`
+  已通过（2 passed）。
+- MinerU Doctor 的第四段边界测试已追加到 `tests/test_mineru_local.py`，覆盖依赖导入、
+  模型根目录、布局权重、按语言选择的 OCR 检测/识别权重、CLI 版本和报告汇总；当前
+  RED 已由用户确认是 `7 failed, 16 passed`，失败原因均为 Doctor 函数尚未实现。
 
 ## 待处理问题
 
-- 下一项按用户授权的临时例外进入解析包入口 `src/paper_rag/parse/__init__.py`。
+- 当前首先完成 MinerU Doctor：先实现 `_import_check()` 与 `_model_dir_checks()`，再实现
+  布局/OCR 权重检查、CLI 版本检查和 `diagnose()` 汇总。
+- `data/index/mineru_models/` 中尚未下载任何真实 MinerU 模型。必须在 Doctor 完成后，
+  根据 Doctor 输出和最终 OCR 语言下载 `Layout/YOLO`、`Layout/LayoutReader` 与
+  `OCR/paddleocr_torch` 所需权重；模型下载完成前不得宣称 GPU OCR 可用。
+- `config/default.yaml` 当前 `mineru.lang: null`。已安装的 `magic-pdf 1.3.12` 会按语言
+  选择 OCR 检测/识别权重，因此在下载前必须确定默认语料语言（英文论文建议 `en`）；
+  Doctor 必须将缺少 OCR 语言视为失败项。
+- 真实 MinerU Demo 与无 mock 集成测试尚未运行；必须在模型准备、Doctor 通过后使用
+  用户选择的真实 PDF 执行，并同时确认 Markdown/图片/layout 产物和真实 GPU 使用。
 - Semantic Scholar 真实验收仍未完成：缺少 API key；
   `scripts/demo_semantic_scholar_source.py` 已创建但未提交，且尚未创建无 mock 的
   `tests/test_semantic_scholar_source_real.py`。不得将该采集源标记为完整完成。
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 - `demo-local-data/`、`demo-url-data/`、`demo-arxiv-data/` 和
-  `demo-openalex-data/` 是用户选择保留的真实采集结果，不得纳入 Git。
+  `demo-openalex-data/`、`demo-pymupdf-data/` 是用户选择保留的真实结果，不得纳入 Git。
+- 当前解析实现、测试、Demo、GPU/OCR 配置和用户运行数据均尚未形成业务 Git
+  checkpoint；课程状态提交不得顺带纳入这些文件。
 
 ## Git 状态说明
 

@@ -14,6 +14,43 @@
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
 - 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
 
+## 新会话恢复协议
+
+新会话不要重新进行需求访谈，也不要从基准仓库重新开始。用户可以把下面这句话作为新会话
+的第一条消息：
+
+```text
+请继续 /home/user_kyh/paper-rag-agent-rebuild 的后端重建课程。先完整读取
+LEARNING_STATE.md、双语 OCR 设计文档和实施计划，再检查 Git 状态；不要回退任何现有改动，
+从状态文件记录的唯一下一步继续。
+```
+
+新会话中的助手必须按以下顺序恢复：
+
+1. 把 `/home/user_kyh/paper-rag-agent-rebuild` 作为实际工作目录；
+   `/home/user_kyh/paper-rag-agent-main` 只作为源码基准，不能把新代码写入基准仓库。
+2. 完整读取本文件；若重建目录中存在 `AGENTS.md`，同时读取并遵守它。
+3. 完整读取
+   `docs/superpowers/specs/2026-07-30-bilingual-mineru-language-routing-design.md` 和
+   `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md`。
+4. 执行只读的 `git status --short` 和 `git log -5 --oneline`，以实际文件系统为准；不得
+   reset、checkout、清理或覆盖任何未提交文件和 Demo 数据。
+5. 如果实施计划仍是未跟踪文件，先告诉用户执行：
+   `git add docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md`，再执行
+   `git commit -m "docs(parse): 规划中英文 OCR 语言路由实施步骤"`。如果计划已经提交，
+   直接跳过这一步。
+6. 随后从实施计划 Task 1 开始。助手先把 `tests/test_mineru_gpu_config.py` 中临时的
+   `lang: en` 期待改为 `lang: auto`，再向 `tests/test_config.py` 添加
+   `auto/ch/en` 配置值域测试；用户运行测试观察 RED。
+7. RED 原因确认后，由用户亲自修改 `src/paper_rag/config.py` 和
+   `config/default.yaml`；助手只能给出逐段代码和解释，不能代写正式功能文件。
+8. 真实模型只能在实施计划 Task 13 下载；Task 14 的中英文真实 GPU OCR 验收完成前，
+   不得进入切块模块，也不得宣称 MinerU GPU OCR 已经可用。
+
+恢复时继续遵守已有分工：助手写测试和 `scripts/demo_*.py`，用户写正式功能代码并执行
+安装、测试、Demo、服务和所有业务 Git 命令。只有用户明确要求“更新进度”时，助手可以
+单独修改并提交 `LEARNING_STATE.md`。
+
 ## 已确认的约束
 
 - 使用与基准仓库相同的 Python 依赖、嵌入/重排模型、Qdrant、Docker 和

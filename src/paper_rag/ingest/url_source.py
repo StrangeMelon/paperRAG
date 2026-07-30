@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -12,6 +11,7 @@ import httpx
 from ..utils.ids import make_paper_id
 from ..utils.logger import get_logger
 from ..utils.paths import paper_dir
+from .metadata import persist_paper_meta
 from .schema import FetchResult, PaperMeta
 from .sources import PaperSource
 
@@ -74,14 +74,7 @@ class UrlSource(PaperSource):
             source=self.name,
         )
 
-        (target / "meta.json").write_text(
-            json.dumps(
-                meta.model_dump(mode="json"),
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        meta = persist_paper_meta(target, meta)
 
         (target / "source.txt").write_text(
             f"source={self.name}\nquery={url}\n",

@@ -6,6 +6,7 @@ import importlib
 from pathlib import Path
 from types import ModuleType
 
+import pytest
 import yaml
 
 
@@ -113,3 +114,17 @@ def test_explicit_path_has_highest_priority(
     assert Path(loaded_from_explicit_path.paths.data_root) == (
         config.PROJECT_ROOT / "explicit-data"
     ).resolve()
+
+
+@pytest.mark.parametrize("language", ["auto", "ch", "en"])
+def test_mineru_language_accepts_supported_modes(language: str) -> None:
+    config = _config_module()
+
+    assert config._MinerU(lang=language).lang == language
+
+
+def test_mineru_language_rejects_unknown_mode() -> None:
+    config = _config_module()
+
+    with pytest.raises(ValueError):
+        config._MinerU(lang="fr")

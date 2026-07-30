@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -57,7 +57,7 @@ class _MinerU(BaseModel):
     mode: str = "local"
     cli: str = "mineru"
     method: str = "auto"  # auto | txt | ocr
-    lang: str | None = None
+    lang: Literal["auto", "ch", "en"] = "auto"
     timeout_sec: int = 600
     fallback_to_pymupdf: bool = True
 

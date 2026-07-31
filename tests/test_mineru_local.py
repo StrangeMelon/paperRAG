@@ -627,8 +627,25 @@ def test_cli_version_check_runs_real_executable(tmp_path: Path) -> None:
     assert check.detail == "magic-pdf, version 1.3.12"
 
 
-def test_diagnose_aggregates_current_runtime_without_hiding_failures() -> None:
+def test_diagnose_aggregates_current_runtime_without_hiding_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     module = _mineru_module()
+    project_root = tmp_path / "project"
+    config_dir = project_root / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "magic-pdf.json").write_text(
+        json.dumps(
+            {
+                "models-dir": "./models",
+                "layoutreader-model-dir": "./models/Layout/LayoutReader",
+                "layout-config": {"model": "doclayout_yolo"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module.cfg, "PROJECT_ROOT", project_root)
 
     report = module.diagnose()
 
@@ -637,7 +654,6 @@ def test_diagnose_aggregates_current_runtime_without_hiding_failures() -> None:
     assert "cli" in check_names
     assert "magic-pdf config" in check_names
     assert "models-dir" in check_names
-    # assert "OCR language" in check_names
     assert {
         "OCR detection weight:ch",
         "OCR recognition weight:ch",

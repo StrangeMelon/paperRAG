@@ -9,7 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -18,6 +18,7 @@ from typing import Any
 from .. import config as cfg
 from ..utils.logger import get_logger
 from ..utils.paths import parsed_dir
+from .language import OcrLanguageDecision, resolve_ocr_language
 
 log = get_logger(__name__)
 
@@ -826,6 +827,27 @@ def _normalize_into(
         break
 
 
+def _select_available_ocr_language(
+    decision: OcrLanguageDecision,
+    config_path: Path,
+) -> OcrLanguageDecision:
+    if _ocr_weights_available(config_path, decision.mineru_language):
+        return decision
+    if (
+        decision.mineru_language == "en"
+        and _ocr_weights_available(config_path, "ch")
+    ):
+        return replace(
+            decision,
+            mineru_language="ch",
+            reason=f"{decision.reason};english_weights_missing",
+            model_fallback=True,
+        )
+    raise MineruError(
+        f"OCR model weights missing for {decision.mineru_language}"
+    )
+
+
 # 真正的解析调度函数
 def parse_pdf(
     paper_id: str,
@@ -858,6 +880,17 @@ def parse_pdf(
             "请安装 MinerU, 或检查配置项 mineru.cli。"
         )
 
+    config_path = _mineru_config_path()
+    decision = resolve_ocr_language(
+        resolved_pdf_path,
+        config.mineru.lang,
+    )
+    decision = _select_available_ocr_language(decision, config_path)
+    (output_dir / "language.json").write_text(
+        json.dumps(asdict(decision), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
     command = [
         cli_path,
         "-p",
@@ -868,13 +901,14 @@ def parse_pdf(
         config.mineru.method,
     ]
 
-    if config.mineru.lang:
-        command.extend(
-            [
-                "-l",
-                config.mineru.lang,
-            ]
-        )
+    # if config.mineru.lang:
+    #     command.extend(
+    #         [
+    #             "-l",
+    #             config.mineru.lang,
+    #         ]
+    #     )
+    command.extend(["-l", decision.mineru_language])
 
     environment = _ensure_runtime_env(
         os.environ.copy()

@@ -23,6 +23,24 @@ def _mineru_module() -> ModuleType:
         )
 
 
+@pytest.fixture(autouse=True)
+def _assume_ocr_weights_for_boundary_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """默认假设 OCR 权重齐备, 使不涉及模型文件的边界测试不读取真实权重目录。
+
+    需要验证降级行为的测试会在用例内再次覆盖 ``_ocr_weights_available``。
+    """
+
+    module = _mineru_module()
+    monkeypatch.setattr(
+        module,
+        "_ocr_weights_available",
+        lambda *_args: True,
+        raising=False,
+    )
+
+
 def test_runtime_environment_creates_isolated_cache_directories(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -221,7 +239,7 @@ def _parser_config(tmp_path: Path) -> SimpleNamespace:
         mineru=SimpleNamespace(
             cli="mineru",
             method="auto",
-            lang="en",
+            lang="auto",
             timeout_sec=12,
         ),
     )
@@ -280,6 +298,18 @@ def test_parse_pdf_runs_cli_and_normalizes_real_files(
         "_resolve_cli",
         lambda cli_name=None: "/venv/bin/mineru",
     )
+    decision = module.OcrLanguageDecision(
+        document_language="en",
+        mineru_language="en",
+        source="pdf_text",
+        reason="latin_text_detected",
+        model_fallback=False,
+    )
+    monkeypatch.setattr(
+        module,
+        "resolve_ocr_language",
+        lambda *args, **kwargs: decision,
+    )
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     result = module.parse_pdf("demo-paper", pdf_path)
@@ -296,6 +326,8 @@ def test_parse_pdf_runs_cli_and_normalizes_real_files(
         "-l",
         "en",
     ]
+    # 应用层 auto 必须解析为具体 ch/en, 不得原样透传给 CLI。
+    assert "auto" not in captured["command"][captured["command"].index("-l"):]
     assert captured["capture_output"] is True
     assert captured["text"] is True
     assert captured["timeout"] == 12
@@ -311,6 +343,72 @@ def test_parse_pdf_runs_cli_and_normalizes_real_files(
         "# Parsed"
     )
     assert (output_dir / "figures" / "chart.png").read_bytes() == b"chart"
+
+
+def test_parse_pdf_falls_back_to_chinese_when_english_weights_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _mineru_module()
+    pdf_path = tmp_path / "input.pdf"
+    pdf_path.write_bytes(b"%PDF-boundary-test")
+    output_dir = tmp_path / "parsed" / "demo-paper"
+    captured: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        captured["command"] = command
+        generated_dir = Path(command[command.index("-o") + 1]) / "input" / "auto"
+        generated_dir.mkdir(parents=True)
+        (generated_dir / "input.md").write_text(
+            "# Parsed\n\ncontent\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, "done", "")
+
+    decision = module.OcrLanguageDecision(
+        document_language="en",
+        mineru_language="en",
+        source="pdf_text",
+        reason="latin_text_detected",
+        model_fallback=False,
+    )
+    monkeypatch.setattr(module.cfg, "load", lambda: _parser_config(tmp_path))
+    monkeypatch.setattr(module.cfg, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(
+        module,
+        "parsed_dir",
+        lambda paper_id: output_dir,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        module,
+        "_resolve_cli",
+        lambda cli_name=None: "/venv/bin/mineru",
+    )
+    monkeypatch.setattr(
+        module,
+        "resolve_ocr_language",
+        lambda *args, **kwargs: decision,
+    )
+    # 英文权重缺失、中文权重可用: 覆盖 autouse 夹具的乐观假设。
+    monkeypatch.setattr(
+        module,
+        "_ocr_weights_available",
+        lambda config_path, language: language == "ch",
+    )
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = module.parse_pdf("demo-paper", pdf_path)
+
+    assert result == output_dir
+    language_flag = captured["command"].index("-l")
+    assert captured["command"][language_flag + 1] == "ch"
+    payload = json.loads(
+        (output_dir / "language.json").read_text(encoding="utf-8")
+    )
+    assert payload["mineru_language"] == "ch"
+    assert payload["model_fallback"] is True
 
 
 def test_parse_pdf_rejects_missing_cli(

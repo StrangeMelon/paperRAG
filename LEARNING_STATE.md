@@ -2,16 +2,19 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-31（双语 OCR Task 10 已提交；当前工作区目标验收通过，
-  但干净提交快照发现一项测试可复现性问题；真实模型尚未下载）
+- 上下文恢复点：2026-07-31（双语 OCR Task 10–14 已提交；真实模型已下载、`mineru_doctor.py
+  --strict` 严格通过；中英文真实 GPU OCR Demo 与无 mock 集成测试已由用户在真实 GPU 上
+  运行通过并提交）
 - 当前阶段：P4（采集、解析和切块）
 - 当前课次：P4.9（MinerU 本地 GPU OCR 解析器与中英文语言路由）
-- 上一个确认完成文件：`src/paper_rag/parse/mineru_local.py`
-- 当前待处理事项：先修复 Task 10 提交的测试可复现性。唯一下一步是由助手修改
-  `tests/test_mineru_local.py::test_diagnose_aggregates_current_runtime_without_hiding_failures`，
-  使用 `tmp_path` 创建临时 `config/magic-pdf.json` 并 monkeypatch `cfg.PROJECT_ROOT`，消除
-  对未跟踪 `config/magic-pdf.json` 的依赖；用户随后运行 Task 10 两组测试与目标 Ruff。
-  修复提交通过干净快照复核后，才能进入 Task 11。
+- 上一个确认完成文件：`tests/test_mineru_bilingual_real.py`（Task 14，提交 `2e147af`）
+- 当前待处理事项：唯一下一步是实施计划 Task 15——解析调度器
+  `src/paper_rag/parse/dispatcher.py`。助手先写 `tests/test_parse_dispatcher.py` 边界
+  测试并观察 RED；用户实现 `dispatcher.py`（MinerU→PyMuPDF 降级、空结果拒绝、单篇失败
+  隔离，保留 `(Path, parser_name)` 接口）；助手再写 `scripts/demo_parse_dispatcher.py`
+  真实降级 Demo。Task 15 完成后方可进入切块模块。
+- 分工更新（2026-07-31）：`scripts/` 下所有文件均由助手直接写入并自测，不再限于
+  `scripts/demo_*.py`；`src/paper_rag/` 正式功能文件仍由用户编写。
 - Semantic Scholar 恢复点：取得 API key 后运行
   `scripts/demo_semantic_scholar_source.py`，再创建并运行无 mock 真实集成测试
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
@@ -42,13 +45,15 @@ LEARNING_STATE.md、双语 OCR 设计文档和实施计划，再检查 Git 状�
    `git add docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md`，再执行
    `git commit -m "docs(parse): 规划中英文 OCR 语言路由实施步骤"`。如果计划已经提交，
    直接跳过这一步。
-6. 随后从实施计划 Task 1 开始。助手先把 `tests/test_mineru_gpu_config.py` 中临时的
-   `lang: en` 期待改为 `lang: auto`，再向 `tests/test_config.py` 添加
-   `auto/ch/en` 配置值域测试；用户运行测试观察 RED。
-7. RED 原因确认后，由用户亲自修改 `src/paper_rag/config.py` 和
-   `config/default.yaml`；助手只能给出逐段代码和解释，不能代写正式功能文件。
-8. 真实模型只能在实施计划 Task 13 下载；Task 14 的中英文真实 GPU OCR 验收完成前，
-   不得进入切块模块，也不得宣称 MinerU GPU OCR 已经可用。
+6. 随后从实施计划 Task 15 开始。助手先写 `tests/test_parse_dispatcher.py` 边界测试
+   （MinerU 成功→`mineru`；MinerU 抛错且 PyMuPDF 有正文→`pymupdf` 且状态 `degraded`；
+   PyMuPDF 只有页标记→`ParseError` 且状态 `failed`；禁用 fallback 时重抛 MinerU 错误），
+   用户运行观察 RED。
+7. RED 确认后，由用户亲自实现 `src/paper_rag/parse/dispatcher.py`；助手写测试和
+   `scripts/demo_parse_dispatcher.py`，不代写 `src/paper_rag/` 正式功能文件。
+8. Task 1–14 已完成：真实模型已下载到 `data/index/mineru_models/`，`mineru_doctor.py
+   --strict` 退出码 0，中英文真实 GPU OCR 已通过。Task 15 解析调度器完成后方可进入
+   切块模块。
 
 恢复时继续遵守已有分工：助手写测试和 `scripts/demo_*.py`，用户写正式功能代码并执行
 安装、测试、Demo、服务和所有业务 Git 命令。只有用户明确要求“更新进度”时，助手可以
@@ -81,8 +86,8 @@ LEARNING_STATE.md、双语 OCR 设计文档和实施计划，再检查 Git 状�
 ## 协作规则
 
 - 用户负责创建/修改 `src/paper_rag/` 下的正式功能文件，并执行所有 Git 命令。
-- 助手直接创建/修改测试文件和 `scripts/demo_*.py`，无需逐次申请写入权限；助手不得
-  代写正式功能文件。
+- 助手直接创建/修改测试文件和 `scripts/` 下所有脚本，无需逐次申请写入权限；助手不得
+  代写 `src/paper_rag/` 正式功能文件。
 - 用户亲自运行安装、测试、Demo 和服务命令，除非明确要求助手代为执行。
 - 助手可在用户明确要求“更新进度”时维护并单独提交本文件，但不得提交其他文件。
 - 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
@@ -266,21 +271,39 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   `/tmp` 干净快照中 `tests/test_mineru_local.py` 为 24 passed、1 failed，聚合测试因
   `config/magic-pdf.json` 未被提交而缺少 `models-dir` 检查。生产实现未发现对应行为错误，
   测试必须改为自建临时配置后再确认 Task 10 checkpoint。
+- Task 10 测试可复现性已修复并提交为 `7207705 feat(parse): 诊断 MinerU 中英文 OCR 权重`：
+  Doctor 聚合测试改为用 `tmp_path` 自建临时 `config/magic-pdf.json` 并 monkeypatch
+  `cfg.PROJECT_ROOT`，不再依赖未跟踪配置；干净快照复核通过。
+- Task 11 已提交为 `768548d feat(parse): 按论文选择 MinerU OCR 语言`：新增
+  `_select_available_ocr_language()`，CLI 不再接收 `auto`；英文权重缺失且中文可用时降级
+  `ch` 并写出含 `model_fallback` 的 `language.json`。`test_mineru_local.py` 与
+  `test_parse_language.py` 共 35 passed，目标 Ruff 通过。
+- Task 12 已提交为 `ba4d0fb feat(parse): 增加 MinerU 双语模型下载入口`：
+  `scripts/download_mineru_models.py` 固定官方修订 `a4f6a8d…`，含 7 个权重的远端/本地映射、
+  大小校验、`.part` 原子替换与复用；`tests/test_download_mineru_models.py` 3 passed，Ruff
+  与 `--help` 通过。（脚本由助手编写，修复了用户初稿 `cached = Path` 的断裂调用。）
+- Task 13 真实模型已下载到 `data/index/mineru_models/`：LayoutReader `model.safetensors`
+  约 713MB、`ch/en` 四套 OCR 权重、YOLO 布局等共 7 个文件均非空；`mineru_doctor.py
+  --strict` 全部 `[OK]`、退出码 0；`data/` 未进入 Git。Task 13 为 runtime-only，无代码提交。
+- Task 14 已提交为 `2e147af test(parse): 验收 MinerU 中英文 GPU OCR`：
+  `scripts/demo_mineru_local.py` 增加 `--lang auto|ch|en`、打印逐篇语言路由并校验
+  `language.json`；`tests/test_mineru_bilingual_real.py` 为无 mock 双语真实测试，缺环境
+  变量时明确失败不 skip。用户已在真实 GPU 上运行 Demo 与集成测试通过：英文
+  `en/pdf_text`、中文 `ch/metadata`，`paper.md` 非空、`language.json` 记录完整。
 
 ## 待处理问题
 
-- 当前首先修复 Task 10 聚合测试的环境依赖：由助手让该测试通过临时配置独立构造
-  `models-dir`、`layoutreader-model-dir` 和布局配置，再由用户运行目标测试与 Ruff；需再次
-  用只包含 Git 提交内容的干净快照验证。修复 checkpoint 后再执行 Task 11：CLI 不得接收
-  `auto`，英文权重缺失且中文权重可用时降级到 `ch`，并写出 `language.json`。
+- 下一步实施 Task 15 解析调度器 `src/paper_rag/parse/dispatcher.py`：MinerU 成功→
+  `mineru`；MinerU 失败且 PDF 有正文→PyMuPDF `degraded`；扫描件失败或降级空正文→
+  `failed` 且批处理继续；禁用 fallback 时重抛 MinerU 错误。保留 `(Path, parser_name)`
+  接口，`parse_status.json` 记录 `paper_id/status/parser/reason`，用正则剔除页标记后判定
+  是否有实义正文。助手写 `tests/test_parse_dispatcher.py` 与
+  `scripts/demo_parse_dispatcher.py`，用户写 `dispatcher.py`。
 - `src/paper_rag/ingest/arxiv_source.py` 仍有未提交的 Task 6 元数据持久化迁移 diff；
-  此文件不要被 Task 9 提交顺带纳入。先前真实 arXiv 验收卡顿应作为独立网络超时修复
-  处理，不要混入语言决策模块提交。
-- `data/index/mineru_models/` 中尚未下载任何真实 MinerU 模型。必须在 Doctor 完成后，
-  按固定官方修订下载 `Layout/YOLO`、`Layout/LayoutReader` 及 `ch/en` 四个 OCR 权重；
-  模型下载完成前不得宣称 GPU OCR 可用。
-- 真实 MinerU Demo 与无 mock 集成测试尚未运行；必须在模型准备、Doctor 通过后使用
-  用户选择的真实 PDF 执行，并同时确认 Markdown/图片/layout 产物和真实 GPU 使用。
+  不要被后续提交顺带纳入，应作为独立提交，并配套单独规划
+  `fix(ingest): 为 arXiv 真实请求增加超时`。
+- （已完成）真实 MinerU 模型已下载、Doctor 严格通过、中英文真实 GPU OCR Demo 与
+  无 mock 集成测试已通过（Task 13–14）。切块前的真实解析门禁已满足，剩余仅 Task 15。
 - Semantic Scholar 真实验收仍未完成：缺少 API key；
   `scripts/demo_semantic_scholar_source.py` 已创建但未提交，且尚未创建无 mock 的
   `tests/test_semantic_scholar_source_real.py`。不得将该采集源标记为完整完成。
@@ -296,17 +319,23 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   17 秒才返回；PDF 端点可达但下载偏慢。当前判断：这不是 Task 6 元数据持久化迁移引入的
   逻辑问题，应单独规划 `fix(ingest): 为 arXiv 真实请求增加超时`，不要混入 Task 6
   迁移提交。
-- `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
-- `demo-local-data/`、`demo-url-data/`、`demo-arxiv-data/` 和
-  `demo-openalex-data/`、`demo-pymupdf-data/` 是用户选择保留的真实结果，不得纳入 Git。
-- Task 10 目标范围已经通过，但仓库全量 `uv run pytest -q` 当前为 126 passed、6 failed：
-  5 项是 `scripts.init_store` 导入失败，1 项是未跟踪的解析包测试受全量执行顺序影响。
-  全量 `uv run ruff check src tests scripts` 另有 4 项既有问题，位于
-  `scripts/demo_qdrant_store.py`、`src/paper_rag/ingest/arxiv_source.py` 和
-  `src/paper_rag/store/qdrant_store.py`。这些均不在 Task 10 提交范围，不能把仓库状态记录为
-  全量通过，也不要混入 Task 11 提交。
-- `scripts/demo_mineru_local.py`、`scripts/mineru_doctor.py`、解析包其他未跟踪文件、
-  GPU/OCR 配置和用户运行数据仍未形成业务 Git checkpoint；课程状态提交不得顺带纳入。
+- `AGENTS.md`、`CLAUDE.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
+- `demo-local-data/`、`demo-url-data/`、`demo-arxiv-data/`、`demo-openalex-data/`、
+  `demo-pymupdf-data/` 和新增 `demo-mineru-data/` 是用户保留的真实产物，不得纳入 Git。
+- 全量测试须用 `uv run python -m pytest`（把工作目录纳入 sys.path），否则
+  `scripts.init_store` 相关用例会因 `scripts/` 未安装为包而导入失败。真实测试
+  （`tests/test_*_real.py`、`tests/test_mineru_bilingual_real.py`）在缺服务/密钥/环境变量
+  时按约定明确失败、不 skip，需单独运行。全量 Ruff 仍有既有历史问题位于
+  `scripts/demo_qdrant_store.py`、`src/paper_rag/ingest/arxiv_source.py`、
+  `src/paper_rag/store/qdrant_store.py`，不在当前任务范围，勿混入后续提交。
+- 仍未形成业务 checkpoint 的未跟踪文件：`src/paper_rag/parse/__init__.py`、
+  `src/paper_rag/parse/fallback_pymupdf.py`、`tests/test_fallback_pymupdf.py`、
+  `tests/test_mineru_doctor_script.py`、`tests/test_parse_package.py`、
+  `scripts/mineru_doctor.py`、`scripts/demo_fallback_pymupdf.py`、
+  `scripts/demo_semantic_scholar_source.py`、GPU 配置 `config/magic-pdf.json`。其中
+  `tests/test_parse_package.py` 已由助手改为 hermetic（快照并弹出 sys.modules 再 fresh
+  导入），可与 `parse/__init__.py` 作为独立的解析包入口 checkpoint 提交。课程状态提交
+  不得顺带纳入这些文件。
 
 ## Git 状态说明
 
@@ -338,6 +367,10 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `7a88b37 refactor(ingest): 统一 Semantic Scholar 元数据持久化`
 - `5abecae feat(parse): 实现中英文 OCR 语言自动判断`
 - `8ce42b1 feat(parse): 诊断 Mineru 中英文OCR权重`
+- `7207705 feat(parse): 诊断 MinerU 中英文 OCR 权重`（Task 10 测试可复现性修复）
+- `768548d feat(parse): 按论文选择 MinerU OCR 语言`（Task 11）
+- `ba4d0fb feat(parse): 增加 MinerU 双语模型下载入口`（Task 12）
+- `2e147af test(parse): 验收 MinerU 中英文 GPU OCR`（Task 14；Task 13 为 runtime-only 无提交）
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

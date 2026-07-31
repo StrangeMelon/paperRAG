@@ -3,7 +3,7 @@
 切片 1 实现 markdown 标题路径(`#{1,4} Title`)与无标题时的 Body 兜底。
 切片 2 实现英文纯文本标题(PyMuPDF 降级产物)的四种形态与两个守卫。
 切片 3 实现标题清洗、描述性合法性判定、first-abstract 守卫与层级封顶。
-markdown 优先级去重与 References 尾部过滤在切片 4, 中文纯文本规则在切片 5。
+切片 4 实现 markdown 优先级去重与 References 尾部过滤。中文纯文本规则在切片 5。
 """
 
 from __future__ import annotations
@@ -97,6 +97,9 @@ _CANONICAL_HEADINGS = {
 # Abstract 与 References 在 PyMuPDF 提取中经常紧贴上一段落, 永远按标题处理
 _GUARD_BYPASS = {"abstract", "references", "bibliography"}
 
+# 规范标题的前缀匹配: "Appendix A" / "Appendix B: Proofs" 也算规范标题
+_CANONICAL_PREFIXES = ("appendix ",)
+
 
 @dataclass
 class RawSection:
@@ -157,12 +160,12 @@ def split_sections(md: str, *, language: str | None = None) -> list[RawSection]:
     return sections
 
 
-# 获取每个标题的名称、层级、在原文中的字符区间, 以及来源(用于后续切片的去重规则)
+# 获取每个标题的名称、层级、在原文中的字符区间, 以及来源(供去重规则区分优先级)
 def _collect_headers(md: str) -> list[_Header]:
     headers = _markdown_headers(md)
     headers.extend(_plain_headers(md))
     headers.sort(key=lambda h: (h.start, h.end))
-    return _dedupe_overlaps(headers)
+    return _filter_reference_tail(_dedupe_headers(headers))
 
 
 def _markdown_headers(md: str) -> list[_Header]:
@@ -178,7 +181,7 @@ def _plain_headers(md: str) -> list[_Header]:
     """逐行扫描英文纯文本标题; 每行按固定顺序尝试四种形态, 命中即停。
 
     孤立编号形态会吞掉下一行标题, 但扫描仍逐行前进, 标题行自身还会命中
-    裸规范标题形态产生重叠, 由 _dedupe_overlaps 统一丢弃。
+    裸规范标题形态产生重叠, 由 _dedupe_headers 统一丢弃。
     """
     lines = _lines(md)
     headers: list[_Header] = []
@@ -339,7 +342,8 @@ def _valid_heading_name(name: str, *, allow_descriptive: bool = False) -> bool:
 
 
 def _is_canonical_heading(name: str) -> bool:
-    return name.strip().lower() in _CANONICAL_HEADINGS
+    low = name.strip().lower()
+    return low in _CANONICAL_HEADINGS or low.startswith(_CANONICAL_PREFIXES)
 
 
 def _level_from_number(number: str) -> int:
@@ -353,13 +357,41 @@ def _level_from_number(number: str) -> int:
     return min(token.count(".") + 1, 4)
 
 
-def _dedupe_overlaps(headers: list[_Header]) -> list[_Header]:
-    """按 (start, end) 排序后的最小重叠去重: 起点落入前一标题区间的丢弃。"""
+def _dedupe_headers(headers: list[_Header]) -> list[_Header]:
+    """重叠去重: 默认先到先得, 但 markdown 标题可顶替已保留的纯文本标题。
+
+    典型冲突是孤立编号行吞掉下一行的 markdown 标题: 纯文本标题起点更早先被
+    保留, 而 markdown 标记比纯文本猜测可信, 名称与层级都应以 markdown 为准。
+    基准还有同起点同名去重分支; 重建版的纯文本扫描跳过 # 开头的行, 两个来源
+    不可能同起点, 同一行也只会命中一种形态, 该分支不可达, 故不保留。
+    """
     kept: list[_Header] = []
     for h in headers:
         if kept and h.start < kept[-1].end:
+            if h.source == "markdown" and kept[-1].source != "markdown":
+                kept[-1] = h
             continue
         kept.append(h)
+    return kept
+
+
+def _filter_reference_tail(headers: list[_Header]) -> list[_Header]:
+    """References 之后的标题一律丢弃, 仅放行 Appendix* 并以之解除过滤。
+
+    参考文献条目 "编号 + 首字母大写标题" 与行内编号标题形态无法区分,
+    只能按位置过滤; 附录出现后恢复正常识别。
+    """
+    kept: list[_Header] = []
+    in_references = False
+    for h in headers:
+        low = h.name.lower()
+        if in_references and not low.startswith("appendix"):
+            continue
+        kept.append(h)
+        if low == "references":
+            in_references = True
+        elif low.startswith("appendix"):
+            in_references = False
     return kept
 
 

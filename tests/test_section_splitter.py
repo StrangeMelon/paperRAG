@@ -3,9 +3,9 @@
 切片 1: markdown 标题主路径(`#{1,4} Title`) + 无标题兜底。
 切片 2: 英文纯文本标题(PyMuPDF 降级产物)四形态与守卫。
 切片 3: 标题清洗、描述性合法性、层级边界与 first-abstract 守卫。
+切片 4: markdown 优先级去重、References 尾部过滤与英文集成用例。
 输入是解析层产出的 `parsed/<paper_id>/paper.md` 全文; 输出是按文档顺序排列的
-`RawSection` 列表。markdown 优先级去重与 References 尾部过滤留给切片 4,
-中文纯文本规则留给切片 5。
+`RawSection` 列表。中文纯文本规则留给切片 5。
 
 接口约定(切块层已确认方案, 2026-08-01):
 
@@ -419,3 +419,198 @@ def test_roman_numeral_gives_level_one_for_descriptive_title() -> None:
     assert [s.name for s in sections] == ["Evaluation Setup Details"]
     # 罗马数字编号不数点, 固定一级
     assert [s.level for s in sections] == [1]
+
+
+# ---------------------------------------------------------------------------
+# 切片 4: markdown 优先级去重 + References 尾部过滤 + 英文集成用例
+#
+# markdown 优先级: 标题重叠时不再一律"先到先得", markdown 来源的标题可以顶替
+# 已保留的纯文本标题(MinerU 混排输出中 markdown 标记比纯文本猜测可信)。
+# References 尾部过滤: References 节之后的"标题"多为参考文献条目噪声, 一律丢弃,
+# 仅放行 Appendix* 标题并以之解除过滤; 为此 Appendix A / Appendix B 这类带编号
+# 的附录标题也要算进规范白名单(前缀匹配)。
+# ---------------------------------------------------------------------------
+
+
+def test_markdown_heading_replaces_overlapping_plain_header() -> None:
+    mod = _splitter_module()
+    md = "Abstract\n\nSome overview text.\n\nIV.\n## Experimental Setup\n\nSetup details here.\n"
+
+    sections = mod.split_sections(md)
+
+    # 孤立编号行吞掉下一行的 markdown 标题形成重叠; markdown 来源更可信,
+    # 顶替纯文本标题, 层级取 ## 的 2 级而不是罗马数字的 1 级
+    assert [s.name for s in sections] == ["Abstract", "Experimental Setup"]
+    assert [s.level for s in sections] == [1, 2]
+    # 顶替后标题区间只剩 markdown 行, 编号行退回上一节正文(与基准一致的取舍)
+    assert "IV." in sections[0].body
+    assert sections[1].body == "Setup details here."
+
+
+def test_citation_like_numbered_lines_after_references_are_dropped() -> None:
+    mod = _splitter_module()
+    md = (
+        "Abstract\n"
+        "\n"
+        "We study retrieval augmented generation.\n"
+        "\n"
+        "1. Introduction\n"
+        "\n"
+        "Intro body.\n"
+        "\n"
+        "References\n"
+        "\n"
+        "1. Retrieval Augmented Generation Survey\n"
+        "\n"
+        "2. Prompt Tuning Methods Overview\n"
+    )
+
+    sections = mod.split_sections(md)
+
+    # 参考文献条目 "编号 + 首字母大写标题" 与行内编号标题形态无法区分,
+    # 只能靠位置过滤: References 之后的标题一律不再开新节
+    assert [s.name for s in sections] == ["Abstract", "Introduction", "References"]
+    assert "Retrieval Augmented Generation Survey" in sections[2].body
+    assert "Prompt Tuning Methods Overview" in sections[2].body
+
+
+def test_canonical_heading_after_references_is_dropped() -> None:
+    mod = _splitter_module()
+    md = (
+        "Preamble text.\n"
+        "\n"
+        "Conclusion\n"
+        "\n"
+        "Final remarks.\n"
+        "\n"
+        "References\n"
+        "\n"
+        "Discussion\n"
+        "\n"
+        "These notes follow the bibliography.\n"
+    )
+
+    sections = mod.split_sections(md)
+
+    # 白名单标题也不豁免: References 之后只有 Appendix* 能开新节
+    assert [s.name for s in sections] == ["Conclusion", "References"]
+    assert "Discussion" in sections[1].body
+
+
+def test_appendix_heading_survives_reference_tail() -> None:
+    mod = _splitter_module()
+    md = (
+        "Abstract\n"
+        "\n"
+        "We analyze retrieval methods.\n"
+        "\n"
+        "References\n"
+        "\n"
+        "1. Retrieval Augmented Generation Survey\n"
+        "\n"
+        "Appendix A\n"
+        "\n"
+        "Extra material body.\n"
+    )
+
+    sections = mod.split_sections(md)
+
+    # "Appendix A" 靠白名单前缀匹配(appendix + 空格)成为规范标题, 并穿过尾部过滤
+    assert [s.name for s in sections] == ["Abstract", "References", "Appendix A"]
+    assert sections[2].level == 1
+    assert sections[2].body == "Extra material body."
+
+
+def test_appendix_resets_reference_tail_filter() -> None:
+    mod = _splitter_module()
+    md = (
+        "References\n"
+        "\n"
+        "1. Retrieval Augmented Generation Survey\n"
+        "\n"
+        "Appendix A\n"
+        "\n"
+        "Supplementary material body.\n"
+        "\n"
+        "Acknowledgments\n"
+        "\n"
+        "Thanks to the reviewers.\n"
+    )
+
+    sections = mod.split_sections(md)
+
+    # Appendix 解除过滤: 其后的正常标题重新生效。
+    # 注意附录正文首行不能以 "Appendix " 开头, 否则会被前缀白名单误判成
+    # 标题 —— 这是与基准一致的已知误报面, 留待后续切片评估是否收紧
+    assert [s.name for s in sections] == ["References", "Appendix A", "Acknowledgments"]
+    assert sections[2].body == "Thanks to the reviewers."
+
+
+def test_english_plain_text_integration() -> None:
+    mod = _splitter_module()
+    md = (
+        "FLARE: Active Retrieval Augmented Generation\n"
+        "\n"
+        "Jane Doe, John Smith\n"
+        "\n"
+        "<!-- page 1 -->\n"
+        "\n"
+        "Abstract— We propose an active retrieval augmented generation method.\n"
+        "\n"
+        "1.\n"
+        "Introduction\n"
+        "\n"
+        "Long-form generation often hallucinates facts.\n"
+        "\n"
+        "2. Related Work\n"
+        "\n"
+        "Prior systems retrieve only once per query.\n"
+        "\n"
+        "2.1 Query Formulation Methods\n"
+        "\n"
+        "The model decides when and what to retrieve.\n"
+        "\n"
+        "Table 1: Main results on all datasets\n"
+        "\n"
+        "Results\n"
+        "\n"
+        "3. Conclusion\n"
+        "\n"
+        "We presented FLARE and its evaluation.\n"
+        "\n"
+        "References\n"
+        "\n"
+        "1. Retrieval Augmented Generation Survey\n"
+        "\n"
+        "Appendix A\n"
+        "\n"
+        "Additional prompt details.\n"
+    )
+
+    sections = mod.split_sections(md)
+
+    # 英文纯文本链路集成: 行内 Abstract / 孤立编号 / 行内编号(含子节) /
+    # Table 上下文守卫 / References 尾部过滤 / Appendix 放行, 一篇全覆盖
+    assert [s.name for s in sections] == [
+        "Abstract",
+        "Introduction",
+        "Related Work",
+        "Query Formulation Methods",
+        "Conclusion",
+        "References",
+        "Appendix A",
+    ]
+    assert [s.level for s in sections] == [1, 1, 1, 2, 1, 1, 1]
+    assert [s.idx for s in sections] == list(range(7))
+    # 标题行与作者行不属于任何章节
+    assert all("Jane Doe" not in s.body for s in sections)
+    # 行内 Abstract 的同一行剩余文字进入正文
+    assert sections[0].body == "We propose an active retrieval augmented generation method."
+    # 表格标注与被守卫拦下的 "Results" 留在上一节正文里
+    assert "Table 1: Main results on all datasets" in sections[3].body
+    assert "Results" in sections[3].body
+    # 参考文献条目与附录正文各归其位
+    assert "Retrieval Augmented Generation Survey" in sections[5].body
+    assert sections[6].body == "Additional prompt details."
+    for s in sections:
+        assert md[s.start : s.end].strip() == s.body

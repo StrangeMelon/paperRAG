@@ -6,16 +6,15 @@
 
 ## 当前定位
 
-- 当前阶段：P4（采集、解析和切块）；当前课次：P4.10（切块模块，`section_splitter.py`）。
+- 当前阶段：P4（采集、解析和切块）；当前课次：P4.10（切块模块）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
-- 切块进度：切片 0+1 已 GREEN 并提交
-  （`c22cf03 feat(chunk): 章节切分器切片 1 markdown 标题路径与 Body 兜底`）。
-- **唯一下一步**：切片 2 的 RED 测试已由助手追加到 `tests/test_section_splitter.py`
-  并通过 Ruff；用户运行 `uv run pytest -q tests/test_section_splitter.py` 观察 RED
-  （预期新增 8 个失败、3 个负例天然通过），随后由助手讲解实现要点、用户实现切片 2
-  生产代码。
-- 切块文件顺序：`section_splitter.py` → `text_chunker.py` → `contextual.py` →
+- 切块进度：`section_splitter.py` 已全部完成并通过真实验收（切片 0–5b，
+  提交至 `5caefcb`；真实验收用 4 份真实解析产物，含 1 篇中文期刊，细节见归档）。
+- **唯一下一步**：`text_chunker.py` 课次。动手前先检查基准实现的英文隐式假设
+  （token/字符计数对中文的影响是重点），提出中文扩展方案并经用户确认，再按
+  RED → 实现 → GREEN → Ruff 的节奏进行。
+- 切块文件顺序：`section_splitter.py` ✅ → `text_chunker.py` → `contextual.py` →
   （插入 `parse/page_markers.py` 小课次）→ `builder.py` → `sanity.py` →
   `multimodal_chunker.py`。每个文件动手前先检查基准的英文隐式假设（中文扩展约束）。
 - 源码基准：`/home/user_kyh/paper-rag-agent-main`（只读，不得写入）；重建目录：
@@ -50,19 +49,30 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
 - **splitter 接口**：`split_sections(md: str, *, language: str | None = None)`。
   `language` 取领域值 `zh | en | None`（`None` = 双语规则同时启用），由上游调用方从
   `meta.json` / 解析层 `language.json` 传入；供应商值 `ch/en` 只存在于 MinerU 边界。
-- **TDD 切片（6 片；0+1 已完成）**：
-  0) ✅ 包入口 `chunk/__init__.py`（与功能文件同批进 Git）；
+- **TDD 切片（全部完成）**：
+  0) ✅ 包入口 `chunk/__init__.py`；
   1) ✅ markdown 标题主路径 + 无标题兜底 `Body`，签名即含 `language` 参数；
-  2) 英文纯文本标题四形态（行内 Abstract、孤立编号+标题、行内编号标题、裸规范标题）
-  + 段落边界 / Table 上下文两个守卫 + **最小重叠去重**（孤立编号形态与裸规范标题
-  天然在同一标题行重叠，后一个标题落入前一个区间则丢弃）；
-  3) 标题清洗、合法性判定（含描述性规则）与层级计算 + **first-abstract 守卫**
-  （该守卫只对"合法但非规范"标题可观测，与描述性合法性耦合，故从切片 2 挪入）；
-  4) markdown 优先级去重 + references 尾部过滤 + 英文集成用例；
-  5) 中文扩展：中文规范白名单（摘要/引言/相关工作/结论/参考文献/附录…）、中文编号
-  （`一、`、`（一）`、`第X章`、`1、`）、`摘要：`行内切分、中文合法性用 2–30 字符数
-  规则、`图/表/算法` 前缀黑名单、`参考文献→附录` 尾部过滤、`zh/en/None` 路由差异、
-  中文论文集成用例。
+  2) ✅ 英文纯文本标题四形态 + 守卫 + 最小重叠去重；
+  3) ✅ 标题清洗、合法性判定（含描述性规则）、层级计算与 first-abstract 守卫；
+  4) ✅ markdown 优先级去重 + references 尾部过滤 + 英文集成用例；
+  5) ✅ 中文扩展（规范白名单、编号形态、`摘要：`行内切分、2–30 字符合法性、
+  `图/表/算法` 前缀黑名单、`参考文献→附录` 尾部过滤、`zh/en/None` 路由）；
+  5b) ✅ 中文阿拉伯点分编号（`1.`/`1.1`/`2.3.1`，层级按段数；单位字符黑名单
+  `倍/%/‰` 拦小数量词、句读一票否决拦编号列表句；用户提出后追加）。
+- **真实验收（2026-08-01，`scripts/demo_section_splitter.py`）**：4 份真实解析
+  产物（MinerU 中文期刊 + MinerU 英文 2 篇 + PyMuPDF 密排英文）全部断言通过。
+  验收发现并修复两个缺陷：a) 中文期刊 markdown 标题的纯数字直贴形态
+  （`# 1综合…`），清洗正则补 `[0-9]{1,2}(?=汉字)` 分支（限 1–2 位保护年份标题）；
+  b) 真实 PyMuPDF 产物整篇无空行，切片 2 给英文编号形态加的段落边界守卫比基准
+  更严导致整篇只剩 3 节，已删除该守卫与基准对齐（误报由描述性合法性兜住）；
+  **中文编号形态保留边界守卫**（中文合法性判别力弱，且中文主路径是 MinerU）。
+- **splitter 已记账的已知边界（暂不处理，处理时机由用户决定）**：英文
+  `Appendix ` 前缀白名单会把段首 "Appendix A contains proofs." 误判为标题
+  （收紧方案 B：标识符 token + 分隔符/标题式后文）；References 之后的字母编号
+  附录（`A. Dataset Description.`）被尾部过滤丢弃（基准同款）；MinerU 把图注
+  标成 markdown 标题（`# Fig.5Integrated…`）时按 markdown 信任保留（基准同款）；
+  单位黑名单仅收 `倍/%/‰`，"10.5 万条…" 类段首行仍可能误报（万/亿 不能入黑名单，
+  会误伤 "万维网技术" 类真标题）；中文密排 PyMuPDF 版面未验收（无真实样本）。
 - **已确认的基准缺陷修正**：基准把整行传给 `_level_from_number`，
   `"2. Related Work"` 被误判为二级；重建版只用编号本身算层级（切片 2 测试已按修正
   行为断言）。
@@ -96,12 +106,14 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
 
 ## 协作规则
 
-- 用户创建/修改 `src/paper_rag/` 正式功能文件，执行所有安装、测试、Demo、服务命令
-  和业务 Git 命令。
-- 助手直接创建/修改测试文件和 `scripts/` 下所有脚本并自测；不得代写 `src/paper_rag/`
-  正式功能文件。
-- 用户明确要求"更新进度"时，助手维护并单独提交课程文档（本文件与
-  `docs/learning/` 归档），提交不得包含业务文件。
+- （2026-08-01 更新分工）助手直接创建/修改**所有代码文件**（含 `src/paper_rag/`
+  正式功能文件、测试与 `scripts/` 脚本），并自行运行测试、Ruff 与 Demo 验证；
+  对话中只给出改动摘要与设计讲解，不再要求用户手抄代码。
+- **所有 Git 命令由用户执行**（checkpoint 提交、分支等）；助手在每个课次收尾时
+  给出建议的 `git add` 文件清单与 commit message。需要真实 GPU/外部服务的命令
+  也可由用户执行，助手提供命令与预期输出。
+- 用户明确要求"更新进度"时，助手维护课程文档（本文件与 `docs/learning/` 归档），
+  由用户单独提交，提交不得包含业务文件。
 - 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
 - Git message 使用 Conventional Commits：`<type>(<scope>): <中文摘要>`。
 - 提交新模块必须同时提交包入口 `__init__.py`（解析层教训：克隆即失败）；验证手段是
@@ -121,8 +133,8 @@ collection；LLM、嵌入、MinerU 用真实配置/模型/API。
 
 1–6 采集（抽象契约、本地 PDF、URL、arXiv、OpenAlex、Semantic Scholar 边界）与
 7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）均已完成，提交清单见归档。
-当前为 8 切块：section splitter → text chunker → contextual → builder → sanity →
-multimodal chunker。
+当前为 8 切块：section splitter ✅ → text chunker → contextual →
+（page_markers 小课次）→ builder → sanity → multimodal chunker。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
 Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、

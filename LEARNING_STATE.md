@@ -9,14 +9,20 @@
 - 当前阶段：P4（采集、解析和切块）；当前课次：P4.10（切块模块）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
-- 切块进度：`section_splitter.py` 已全部完成并通过真实验收（切片 0–5b，
-  提交至 `5caefcb`；真实验收用 4 份真实解析产物，含 1 篇中文期刊，细节见归档）。
-- **唯一下一步**：`text_chunker.py` 课次。动手前先检查基准实现的英文隐式假设
-  （token/字符计数对中文的影响是重点），提出中文扩展方案并经用户确认，再按
-  RED → 实现 → GREEN → Ruff 的节奏进行。
-- 切块文件顺序：`section_splitter.py` ✅ → `text_chunker.py` → `contextual.py` →
-  （插入 `parse/page_markers.py` 小课次）→ `builder.py` → `sanity.py` →
-  `multimodal_chunker.py`。每个文件动手前先检查基准的英文隐式假设（中文扩展约束）。
+- 切块进度：`section_splitter.py` ✅（切片 0–5b，提交至 `5caefcb`）；
+  `text_chunker.py` ✅（2026-08-01 一课完成 RED 16 failed → GREEN 16 passed、
+  全量 212 passed、Ruff 全绿、`scripts/demo_text_chunker.py` 4 份真实产物验收
+  exit 0；已提交为 `55b4e3d`，细节见归档）；`contextual.py` ✅（2026-08-01
+  同日连课，RED 9 → GREEN 9、全量 221 passed、Ruff 全绿；**待用户提交**，建议
+  message 与文件清单见归档）。
+- **唯一下一步**：`parse/page_markers.py` 小课次（方案 A 已确认，见下方"页码
+  归属"条目；按 2026-08-01 新分工由助手直接实现并接入 MinerU 标准化；真实验收用
+  `demo-mineru-data/` 真实产物、无 mock。功能为偏移对齐，预计语言中立，动手前
+  仍过一遍英文隐式假设清单）。
+- 切块文件顺序：`section_splitter.py` ✅ → `text_chunker.py` ✅ →
+  `contextual.py` ✅ →（插入 `parse/page_markers.py` 小课次）→ `builder.py` →
+  `sanity.py` → `multimodal_chunker.py`。每个文件动手前先检查基准的英文隐式假设
+  （中文扩展约束）。
 - 源码基准：`/home/user_kyh/paper-rag-agent-main`（只读，不得写入）；重建目录：
   `/home/user_kyh/paper-rag-agent-rebuild`。
 
@@ -86,6 +92,30 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
   排期：`builder.py` 之前插入小课次（助手写 RED：正常对齐、定位失败、空 layout、
   0 基转 1 基；用户实现并接入 MinerU 标准化；真实验收用 `demo-mineru-data/`、无
   mock）。splitter 为纯函数以单元测试验收；真实链路 Demo 推迟到 builder 完成后。
+- **chunker 接口与已确认偏离（2026-08-01，`text_chunker.py` 已实现）**：
+  `chunk_text(body: str, *, language: str | None = None) -> list[TextChunk]`，配置仍走
+  `chunk.text`（target/overlap/encoding，无新增项）。不变量强化为
+  `body[char_start:char_end] == text`（builder 溯源可直接依赖）。相对基准四处偏离：
+  a) 偏移用 `body.find` 真实定位（基准 cursor 算术在 4+ 连续换行时漂移、末块
+  char_end 多 2）；b) 无 tiktoken 回退按 CJK 码位逐字计 1 + 其余 len//4（基准
+  len//4 低估中文约 4–7 倍）；c) 超长段落先句子切分再贪心打包，zh 用
+  `。！？；…`+收尾引号、en 用 `[.!?]`+后随空白（小数不切）、None 取并集，
+  无句读段按 token 等分硬切保证上界（基准从不切超长段）；d) overlap 携带尾段加
+  防重守卫（尾段 token*2 > target 时放弃携带；overlap_tokens 仍只作布尔开关，
+  与基准一致）。
+- **chunker 已记账的已知边界（暂不处理，处理时机由用户决定）**：zh 路由下内嵌的
+  超长纯英文段无中文句读可用、落到硬切（改 zh∪en 并集即一行修复）；硬切按字符
+  等分，BPE 密度不均可小幅超 target（真实验收用 1.2×target 上界看护，实测最大
+  546/500，为中文期刊无句读表格区）。
+- **contextual 已确认方案与实现（2026-08-01）**：
+  `with_context(text: str, *, title: str, section: str, language: str | None = None)`。
+  `context_text` 是 BGE-M3 的稠密嵌入输入（裸 `text` 走 BM25），前缀直接塑造
+  向量。zh 路由到新配置键 `chunk.context_prefix_zh`
+  （`[标题: {title}] [章节: {section}]\n`，default.yaml + `_Chunk` 模型各 +1 行），
+  en/None 用基准英文模板（未知语言不猜）；空 title/section 按渲染后 `[...: ]`
+  形态整段移除（半/全角冒号均识别，基准会给每个 chunk 嵌入 `[Title: ]` 死架子），
+  都空时直接返回原文；自定义模板不用括号形态时退化为基准的空串填入。值含花括号
+  安全（format 语义）。纯函数仅单元测试验收，真实链路覆盖并入 builder 课 Demo。
 
 ## 已确认的约束
 

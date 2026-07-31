@@ -71,6 +71,7 @@ class _ChunkText(BaseModel):
 class _Chunk(BaseModel):
     text: _ChunkText = Field(default_factory=_ChunkText)
     context_prefix: str = "[Title: {title}] [Section: {section}]\n"
+    context_prefix_zh: str = "[标题: {title}] [章节: {section}]\n"
 
 
 class _Retrieve(BaseModel):

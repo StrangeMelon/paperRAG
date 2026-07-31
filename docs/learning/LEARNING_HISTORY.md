@@ -189,6 +189,46 @@
   判别力弱、主路径是 MinerU），守卫不对称有正反测试。最终 57 passed；已知边界
   （字母编号附录被尾部过滤、图注 markdown 标题保留、单位黑名单精度、中文密排
   未验收）记录在 LEARNING_STATE 切块层一节。
+- `text_chunker.py` 已完成（2026-08-01，助手直接编码，一课完成
+  RED → 实现 → GREEN → Ruff → 真实 Demo；已提交为 `55b4e3d`，文件
+  `src/paper_rag/chunk/text_chunker.py` + `tests/test_text_chunker.py` +
+  `scripts/demo_text_chunker.py`）。保留基准"段落贪心打包 + 尾段 overlap"骨架，
+  四处经确认的偏离：a) 偏移改 `body.find` 真实定位，不变量强化为
+  `body[char_start:char_end] == text`（基准 cursor 算术在 4+ 连续换行时漂移、
+  末块 char_end 多 2）；b) 回退 token 估算 CJK 逐字计 1 + 其余 len//4（基准
+  len//4 对中文低估 4–7 倍，实测 cl100k_base 中文约 0.87 字符/token、英文约
+  6.07）；c) 超长段落句子切分：zh `[。！？；…]+` 加后随收尾引号、en `[.!?]` 加
+  后随空白（小数 3.5 不切）、None 取并集，无句读段按 token 等分硬切保证上界
+  （基准从不切超长段；真实数据里 PyMuPDF 密排"段落"最大 1469 tok、中文期刊
+  单段 3545 tok）；d) overlap 防重守卫：尾段 token*2 > target 放弃携带（基准
+  会把接近 target 的尾段重复输出成独立 chunk）。RED 16 failed（ModuleNotFound）
+  → GREEN 16 passed、全量 212 passed。RED→GREEN 之间修的两处均为**测试构造
+  问题**而非实现缺陷：语言路由用例三句各恰 10 字符，en 路由的等分硬切碰巧落在
+  句边界上无法区分，改 6/10/10 不等长；中文引号用例句子本身 11 tok 超过
+  target=10 落入硬切，target 调为 12。真实验收 `scripts/demo_text_chunker.py`
+  （复用 splitter 课 4 份真实产物，逐 chunk 断言偏移回切原文、token ≤
+  1.2×target、无重复 chunk、语言路由按 language.json 生效）一次通过 exit 0：
+  中文期刊 16 节 60 块（最大段 3545 tok → 最大 chunk 546 tok）、Graph-Mamba
+  MinerU 25 节 39 块（2571→537）、LocAgent 26 节 44 块（712→503）、PyMuPDF
+  密排 9 节 40 块（1469→499）。546 略超 target 源于硬切按字符等分而 BPE 密度
+  不均（中文期刊无句读表格区），在文档化余量内。已记账边界与接口决定同步记入
+  LEARNING_STATE 切块层一节。
+- `contextual.py` 已完成（2026-08-01，与 text_chunker 同日连课；**待用户提交**，
+  建议 message `feat(chunk): 上下文前缀语言路由与空值省略`，文件
+  `src/paper_rag/chunk/contextual.py` + `tests/test_contextual.py` +
+  `src/paper_rag/config.py`（+1 行）+ `config/default.yaml`（+1 行））。基准仅
+  11 行：`chunk.context_prefix` 模板 format 后拼在 chunk 文本前；沿调用链确认的
+  关键位置：builder 写入 `context_text`，`ingest_pipeline.py:188` 用 BGE-M3 嵌入
+  的正是 `context_text`（裸 `text` 走 BM25），即前缀直接塑造稠密向量。英文隐式
+  假设三条：英文标签使 zh 论文嵌入输入三语混排；空值渲染出 `[Title: ]` 死架子
+  嵌进无标题论文的每个 chunk；模板单一全局无语言机制。经确认扩展（两问均选
+  推荐项）：zh 路由到新配置键 `chunk.context_prefix_zh`
+  （`[标题: {title}] [章节: {section}]\n`），en/None 用基准模板；空 title/section
+  按渲染后 `[...: ]` 形态整段移除（半/全角冒号均识别），都空直接返回原文，
+  自定义模板不用该形态时退化为基准空串填入；值含花括号安全（format 只解释模板
+  占位符）已测试。RED 9 failed（ModuleNotFound）→ GREEN 9 passed，全量
+  221 passed，Ruff 全绿（config.py 仅 +1 行，其既有格式漂移未触碰）。纯函数无
+  独立 Demo，真实链路覆盖并入 builder 课。
 
 ## 已关闭/已诊断问题的细节
 
@@ -252,3 +292,4 @@
 - `8615c08 feat(chunk): 章节切分器切片 4 markdown 优先级去重与 References 尾部过滤`
 - `ef7ed00 feat(chunk): 章节切分器切片 5 中文标题规则、阿拉伯点分编号与语言路由`
 - `5caefcb fix(chunk): 章节切分器真实验收修复数字直贴清洗与密排编号标题识别`
+- `55b4e3d feat(chunk): 文本切块器双语句子切分、CJK 回退计数与真实定位偏移`

@@ -42,6 +42,7 @@ chunk:
     overlap_tokens: 50
     encoding: cl100k_base
   context_prefix: "[Title: {title}] [Section: {section}]\n"
+  context_prefix_zh: "[标题: {title}] [章节: {section}]\n"
 
 retrieve:
   top_k_dense: 20

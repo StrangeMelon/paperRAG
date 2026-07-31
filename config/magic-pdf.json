@@ -1,0 +1,27 @@
+{
+  "models-dir": "./data/index/mineru_models",
+  "layoutreader-model-dir": "./data/index/mineru_models/Layout/LayoutReader",
+  "device-mode": "cuda",
+  "bucket_info": {
+    "[default]": [
+      null,
+      null,
+      null
+    ]
+  },
+  "layout-config": {
+    "model": "doclayout_yolo"
+  },
+  "table-config": {
+    "model": "rapid_table",
+    "sub_model": "slanet_plus",
+    "enable": false
+  },
+  "formula-config": {
+    "mfd_model": "yolo_v8_mfd",
+    "mfr_model": "unimernet_small",
+    "enable": false
+  },
+  "llm-aided-config": null,
+  "latex-delimiter-config": null
+}

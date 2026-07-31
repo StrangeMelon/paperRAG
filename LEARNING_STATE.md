@@ -7,11 +7,11 @@
 - 当前阶段：P4（采集、解析和切块）
 - 当前课次：P4.10（切块模块起步）
 - 上一个确认完成文件：`src/paper_rag/parse/dispatcher.py`（Task 15，提交 `c9c0c24`）
-- 当前待处理事项：解析阶段门禁已全部满足，唯一下一步是**切块模块**。先建包入口
-  `src/paper_rag/chunk/__init__.py`（助手写 `tests/test_chunk_package.py`），再按 TDD
-  切片实现 `src/paper_rag/chunk/section_splitter.py`。动手前必须先读基准实现
-  `/home/user_kyh/paper-rag-agent-main/src/paper_rag/chunk/section_splitter.py`（325 行，
-  是切块层最大的文件），由助手提出切片方案并与用户确认后再写第一段 RED 测试。
+- 当前待处理事项：基准 `chunk/` 已读，切块 TDD 切片方案与页码归属方案 A 已于
+  2026-08-01 经用户确认（见"切块层已确认方案"）。唯一下一步是助手写切片 0 的
+  `tests/test_chunk_package.py` 与切片 1 的 `tests/test_section_splitter.py` 第一段
+  RED 测试，用户运行观察 RED 后亲自实现 `src/paper_rag/chunk/__init__.py` 和
+  `section_splitter.py`。
 - 切块文件顺序（基准 `chunk/` 共六个功能文件）：`section_splitter.py` →
   `text_chunker.py` → `contextual.py` → `builder.py` → `sanity.py` →
   `multimodal_chunker.py`。
@@ -61,6 +61,43 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
 恢复时继续遵守已有分工：助手写测试和 `scripts/demo_*.py`，用户写正式功能代码并执行
 安装、测试、Demo、服务和所有业务 Git 命令。只有用户明确要求“更新进度”时，助手可以
 单独修改并提交 `LEARNING_STATE.md`。
+
+## 切块层已确认方案（2026-08-01）
+
+- **全局新约束（中文论文扩展）**：重建版已支持中文论文（语言元数据链路 `zh/en`），
+  从切块层起**所有后续模块**都必须显式考虑中文论文，不得照抄基准的纯英文逻辑。每个
+  新文件动手前先检查基准实现中的英文隐式假设（英文标题白名单、空格分词、大写比例
+  启发式、English-only 正则等），提出中文扩展方案并经用户确认。
+- **splitter 接口**：`split_sections(md: str, *, language: str | None = None)`。
+  `language` 取领域值 `zh | en | None`（`None` = 双语规则同时启用），由上游调用方从
+  `meta.json` / 解析层 `language.json` 传入；供应商值 `ch/en` 只存在于 MinerU 边界。
+- **TDD 切片（6 片，已确认）**：
+  0) `tests/test_chunk_package.py` + 包入口 `chunk/__init__.py`（必须与功能文件同批
+  进 Git）；
+  1) markdown 标题主路径 + 无标题兜底为单个 `Body`，签名即含 `language` 参数；
+  2) 英文纯文本标题四形态（行内 Abstract、孤立编号+标题、行内编号标题、裸规范标题）
+  及段落边界 / Table 上下文 / first-abstract 三个守卫；
+  3) 标题清洗、合法性判定与层级计算；
+  4) 去重 + references 尾部过滤 + 英文集成用例（含页标记留在 body 的断言）；
+  5) 中文扩展：中文规范白名单（摘要/引言/相关工作/结论/参考文献/附录…）、中文编号
+  （`一、`、`（一）`、`第X章`、`1、`）、`摘要：`行内切分、中文合法性用 2–30 字符数
+  规则（不用空格分词与大写比例）、`图/表/算法` 前缀黑名单、`参考文献→附录` 尾部
+  过滤、`zh/en/None` 三种路由行为差异、中文论文集成用例。
+- **页码归属（方案 A，已确认）**：基准缺陷——基准 `builder.py` 仅靠
+  `<!-- page N -->` 标记归属页码，MinerU 路径的 `paper.md` 无标记，导致基准中 MinerU
+  解析的论文所有 chunk `page=None`。重建版在解析边界统一契约：新增纯函数
+  `src/paper_rag/parse/page_markers.py::inject_page_markers(md, blocks)`，按
+  `layout.json`（MinerU content_list：块含 `type/text/page_idx`，`page_idx` 为 0 基）
+  在 `page_idx` 跳变块处用块文本前缀顺序对齐定位 md 偏移，插入 `<!-- page N -->`
+  （`N = page_idx + 1`，与 PyMuPDF 路径一致的 1 基）；定位失败的块跳过，页码粒度
+  优雅降级不报错。接入 MinerU 标准化产出后，"`paper.md` 一律带页标记"成为后端无关
+  不变量，切块层保持单一代码路径。已用 `demo-mineru-data/` 真实中文论文（15 页、
+  159 块）验证：116 个非空文本块按前缀顺序对齐零失配。
+- **排期**：`page_markers.py` 是解析层增量（新需求触发，非返工），**不阻塞** splitter
+  课次；在讲到 `builder.py` 之前插入小课次完成（助手写 RED 测试，覆盖正常对齐、块
+  文本定位失败、空 layout、0 基转 1 基；用户实现并接入 MinerU 标准化；真实验收用
+  `demo-mineru-data/` 产物、无 mock）。splitter 为纯函数，以单元测试为主要验收；真实
+  链路 Demo 推迟到 builder 完成后，用真实 `parsed/<paper_id>/paper.md` 覆盖整条切块链。
 
 ## 已确认的约束
 
@@ -320,10 +357,9 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 
 ## 待处理问题
 
-- **下一步是切块模块**，不再有解析层未完成任务。先读基准
-  `/home/user_kyh/paper-rag-agent-main/src/paper_rag/chunk/section_splitter.py`，由助手提出
-  TDD 切片方案并经用户确认，再写 `tests/test_chunk_package.py` 与
-  `tests/test_section_splitter.py` 的第一段 RED。
+- **下一步是切块切片 0+1 的 RED 测试**：基准 `chunk/` 已读，切片方案、中文扩展约束
+  与页码归属方案 A 均已于 2026-08-01 确认（见"切块层已确认方案"）。解析层新增
+  `page_markers.py` 小课次安排在 `builder.py` 之前，不插队当前 splitter 课次。
 - `src/paper_rag/ingest/arxiv_source.py` 仍有未提交的 Task 6 元数据持久化迁移 diff
   （6 insertions / 11 deletions）；不要被后续提交顺带纳入，应作为独立提交，并配套单独
   规划 `fix(ingest): 为 arXiv 真实请求增加超时`。用户已知悉，暂缓处理。

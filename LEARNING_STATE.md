@@ -1,31 +1,29 @@
 # 学习状态
 
+> 本文件只保留恢复课程所需的最小状态。逐课完成记录、逐提交注解与已诊断问题的细节
+> 已归档到 `docs/learning/LEARNING_HISTORY.md`，恢复课程**不需要**读取归档，仅在
+> 追溯历史时查阅。
+
 ## 当前定位
 
-- 上下文恢复点：2026-07-31（双语 OCR 实施计划 15 个任务全部完成并提交；解析层四个历史
-  遗留 checkpoint 已补提交；干净 HEAD 快照实跑解析层 55 passed，可复现性缺口关闭）
-- 当前阶段：P4（采集、解析和切块）
-- 当前课次：P4.10（切块模块起步）
-- 上一个确认完成文件：`src/paper_rag/parse/dispatcher.py`（Task 15，提交 `c9c0c24`）
-- 当前待处理事项：基准 `chunk/` 已读，切块 TDD 切片方案与页码归属方案 A 已于
-  2026-08-01 经用户确认（见"切块层已确认方案"）。唯一下一步是助手写切片 0 的
-  `tests/test_chunk_package.py` 与切片 1 的 `tests/test_section_splitter.py` 第一段
-  RED 测试，用户运行观察 RED 后亲自实现 `src/paper_rag/chunk/__init__.py` 和
-  `section_splitter.py`。
-- 切块文件顺序（基准 `chunk/` 共六个功能文件）：`section_splitter.py` →
-  `text_chunker.py` → `contextual.py` → `builder.py` → `sanity.py` →
-  `multimodal_chunker.py`。
-- 分工更新（2026-07-31）：`scripts/` 下所有文件均由助手直接写入并自测，不再限于
-  `scripts/demo_*.py`；`src/paper_rag/` 正式功能文件仍由用户编写。
-- Semantic Scholar 恢复点：取得 API key 后运行
-  `scripts/demo_semantic_scholar_source.py`，再创建并运行无 mock 真实集成测试
-- 源文件基准：`/home/user_kyh/paper-rag-agent-main`
-- 重建目录：`/home/user_kyh/paper-rag-agent-rebuild`
+- 当前阶段：P4（采集、解析和切块）；当前课次：P4.10（切块模块，`section_splitter.py`）。
+- 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
+  细节见归档）。
+- 切块进度：切片 0+1 已 GREEN 并提交
+  （`c22cf03 feat(chunk): 章节切分器切片 1 markdown 标题路径与 Body 兜底`）。
+- **唯一下一步**：切片 2 的 RED 测试已由助手追加到 `tests/test_section_splitter.py`
+  并通过 Ruff；用户运行 `uv run pytest -q tests/test_section_splitter.py` 观察 RED
+  （预期新增 8 个失败、3 个负例天然通过），随后由助手讲解实现要点、用户实现切片 2
+  生产代码。
+- 切块文件顺序：`section_splitter.py` → `text_chunker.py` → `contextual.py` →
+  （插入 `parse/page_markers.py` 小课次）→ `builder.py` → `sanity.py` →
+  `multimodal_chunker.py`。每个文件动手前先检查基准的英文隐式假设（中文扩展约束）。
+- 源码基准：`/home/user_kyh/paper-rag-agent-main`（只读，不得写入）；重建目录：
+  `/home/user_kyh/paper-rag-agent-rebuild`。
 
 ## 新会话恢复协议
 
-新会话不要重新进行需求访谈，也不要从基准仓库重新开始。用户可以把下面这句话作为新会话
-的第一条消息：
+用户可以把下面这句话作为新会话的第一条消息：
 
 ```text
 请继续 /home/user_kyh/paper-rag-agent-rebuild 的后端重建课程。先完整读取
@@ -33,34 +31,15 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
 从状态文件记录的唯一下一步继续。
 ```
 
-新会话中的助手必须按以下顺序恢复：
+恢复顺序：
 
-1. 把 `/home/user_kyh/paper-rag-agent-rebuild` 作为实际工作目录；
-   `/home/user_kyh/paper-rag-agent-main` 只作为源码基准，不能把新代码写入基准仓库。
-2. 完整读取本文件；若重建目录中存在 `AGENTS.md`，同时读取并遵守它。
-3. 执行只读的 `git status --short` 和 `git log -5 --oneline`，以实际文件系统为准；不得
+1. 工作目录为重建目录；基准仓库只作源码参考，不能写入新代码。
+2. 完整读取本文件；若重建目录中存在 `AGENTS.md`，同时读取并遵守。
+3. 只读执行 `git status --short` 和 `git log -5 --oneline`，以实际文件系统为准；不得
    reset、checkout、清理或覆盖任何未提交文件；`demo-*-data/` 和 `data/` 已被
-   `.gitignore` 忽略，是用户保留的真实产物，同样不得删除。
-4. 解析阶段已全部完成，双语 OCR 设计文档
-   `docs/superpowers/specs/2026-07-30-bilingual-mineru-language-routing-design.md` 和实施计划
-   `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md` 15 个任务全部
-   收尾，只作为历史参考，不需要再执行。
-5. 开始切块模块前，先读基准实现
-   `/home/user_kyh/paper-rag-agent-main/src/paper_rag/chunk/`（尤其是 `section_splitter.py`），
-   总结切块契约（章节识别、层级、页码归属、与 `parsed/<paper_id>/paper.md` 的关系），
-   并向用户提出 TDD 切片方案。切块层是否需要单独的设计文档与实施计划，由用户决定；
-   不要擅自生成大篇幅计划文档。
-6. 用户确认切片方案后，助手先写 `tests/test_chunk_package.py` 与
-   `tests/test_section_splitter.py` 第一段 RED 测试，用户运行观察 RED。
-7. RED 确认后，由用户亲自实现 `src/paper_rag/chunk/__init__.py` 和
-   `section_splitter.py`；助手写测试和 `scripts/demo_*.py`，不代写 `src/paper_rag/`
-   正式功能文件。
-8. arXiv 真实请求超时和 Semantic Scholar 真实验收是**已知阻塞项**，记录在“待处理问题”
-   中；除非用户明确要求，不要在切块课次中间插队处理。
-
-恢复时继续遵守已有分工：助手写测试和 `scripts/demo_*.py`，用户写正式功能代码并执行
-安装、测试、Demo、服务和所有业务 Git 命令。只有用户明确要求“更新进度”时，助手可以
-单独修改并提交 `LEARNING_STATE.md`。
+   `.gitignore` 忽略，是用户保留的真实产物，不得删除。
+4. 从"当前定位"的唯一下一步继续；"待处理问题"中的已知阻塞项除非用户明确要求，
+   不要在课次中间插队处理。
 
 ## 切块层已确认方案（2026-08-01）
 
@@ -71,372 +50,104 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
 - **splitter 接口**：`split_sections(md: str, *, language: str | None = None)`。
   `language` 取领域值 `zh | en | None`（`None` = 双语规则同时启用），由上游调用方从
   `meta.json` / 解析层 `language.json` 传入；供应商值 `ch/en` 只存在于 MinerU 边界。
-- **TDD 切片（6 片，已确认）**：
-  0) `tests/test_chunk_package.py` + 包入口 `chunk/__init__.py`（必须与功能文件同批
-  进 Git）；
-  1) markdown 标题主路径 + 无标题兜底为单个 `Body`，签名即含 `language` 参数；
+- **TDD 切片（6 片；0+1 已完成）**：
+  0) ✅ 包入口 `chunk/__init__.py`（与功能文件同批进 Git）；
+  1) ✅ markdown 标题主路径 + 无标题兜底 `Body`，签名即含 `language` 参数；
   2) 英文纯文本标题四形态（行内 Abstract、孤立编号+标题、行内编号标题、裸规范标题）
-  及段落边界 / Table 上下文 / first-abstract 三个守卫；
-  3) 标题清洗、合法性判定与层级计算；
-  4) 去重 + references 尾部过滤 + 英文集成用例（含页标记留在 body 的断言）；
+  + 段落边界 / Table 上下文两个守卫 + **最小重叠去重**（孤立编号形态与裸规范标题
+  天然在同一标题行重叠，后一个标题落入前一个区间则丢弃）；
+  3) 标题清洗、合法性判定（含描述性规则）与层级计算 + **first-abstract 守卫**
+  （该守卫只对"合法但非规范"标题可观测，与描述性合法性耦合，故从切片 2 挪入）；
+  4) markdown 优先级去重 + references 尾部过滤 + 英文集成用例；
   5) 中文扩展：中文规范白名单（摘要/引言/相关工作/结论/参考文献/附录…）、中文编号
   （`一、`、`（一）`、`第X章`、`1、`）、`摘要：`行内切分、中文合法性用 2–30 字符数
-  规则（不用空格分词与大写比例）、`图/表/算法` 前缀黑名单、`参考文献→附录` 尾部
-  过滤、`zh/en/None` 三种路由行为差异、中文论文集成用例。
-- **页码归属（方案 A，已确认）**：基准缺陷——基准 `builder.py` 仅靠
-  `<!-- page N -->` 标记归属页码，MinerU 路径的 `paper.md` 无标记，导致基准中 MinerU
-  解析的论文所有 chunk `page=None`。重建版在解析边界统一契约：新增纯函数
-  `src/paper_rag/parse/page_markers.py::inject_page_markers(md, blocks)`，按
-  `layout.json`（MinerU content_list：块含 `type/text/page_idx`，`page_idx` 为 0 基）
-  在 `page_idx` 跳变块处用块文本前缀顺序对齐定位 md 偏移，插入 `<!-- page N -->`
-  （`N = page_idx + 1`，与 PyMuPDF 路径一致的 1 基）；定位失败的块跳过，页码粒度
-  优雅降级不报错。接入 MinerU 标准化产出后，"`paper.md` 一律带页标记"成为后端无关
-  不变量，切块层保持单一代码路径。已用 `demo-mineru-data/` 真实中文论文（15 页、
-  159 块）验证：116 个非空文本块按前缀顺序对齐零失配。
-- **排期**：`page_markers.py` 是解析层增量（新需求触发，非返工），**不阻塞** splitter
-  课次；在讲到 `builder.py` 之前插入小课次完成（助手写 RED 测试，覆盖正常对齐、块
-  文本定位失败、空 layout、0 基转 1 基；用户实现并接入 MinerU 标准化；真实验收用
-  `demo-mineru-data/` 产物、无 mock）。splitter 为纯函数，以单元测试为主要验收；真实
-  链路 Demo 推迟到 builder 完成后，用真实 `parsed/<paper_id>/paper.md` 覆盖整条切块链。
+  规则、`图/表/算法` 前缀黑名单、`参考文献→附录` 尾部过滤、`zh/en/None` 路由差异、
+  中文论文集成用例。
+- **已确认的基准缺陷修正**：基准把整行传给 `_level_from_number`，
+  `"2. Related Work"` 被误判为二级；重建版只用编号本身算层级（切片 2 测试已按修正
+  行为断言）。
+- **页码归属（方案 A）**：基准 `builder.py` 仅靠 `<!-- page N -->` 标记归属页码，
+  MinerU 路径的 `paper.md` 无标记，导致 MinerU 论文所有 chunk `page=None`。重建版
+  新增纯函数 `src/paper_rag/parse/page_markers.py::inject_page_markers(md, blocks)`：
+  按 `layout.json`（MinerU content_list，块含 `type/text/page_idx`，0 基）在
+  `page_idx` 跳变处用块文本前缀顺序对齐定位 md 偏移，插入 `<!-- page N -->`
+  （`N = page_idx + 1`，与 PyMuPDF 一致的 1 基）；定位失败跳过、优雅降级。已用
+  `demo-mineru-data/` 真实中文论文（15 页、159 块）验证 116 个非空文本块零失配。
+  排期：`builder.py` 之前插入小课次（助手写 RED：正常对齐、定位失败、空 layout、
+  0 基转 1 基；用户实现并接入 MinerU 标准化；真实验收用 `demo-mineru-data/`、无
+  mock）。splitter 为纯函数以单元测试验收；真实链路 Demo 推迟到 builder 完成后。
 
 ## 已确认的约束
 
 - 使用与基准仓库相同的 Python 依赖、嵌入/重排模型、Qdrant、Docker 和
-  OpenAI-compatible LLM 配置。
-- 按可运行的依赖顺序重建，而非不可恢复的历史提交顺序。
-- 核心 RAG 优先，随后扩展 Discovery、Wiki、反馈、主动 Agent、交付物和 DeerFlow。
-- 代码逐文件讲解和复制；不讲 DeerFlow 前端及无关上游后端功能。
-- 所有教学文本使用中文。
-- 使用 `uv` 管理虚拟环境、依赖和 `uv.lock`，不使用 Conda。
-- 以运行行为、公开接口、测试和评测为等价标准，不要求源文件字节级一致。
-- MinerU 生产默认使用 `.venv/bin/magic-pdf`、强制 `ocr` 模式和 CUDA GPU；真实模型
-  必须下载到重写项目自己的 `data/index/mineru_models/`，不得引用原项目模型目录。
-- 论文集合同时包含中文和英文论文；纯扫描 PDF 由人工在同目录 `meta.json` 顶层标注
-  `language: "zh" | "en"`，普通 PDF 不要求人工标注。
-- 应用配置使用 `mineru.lang: auto | ch | en`；`auto` 模式优先读取人工元数据，其次使用
-  PyMuPDF 采样文字判断，无法判断时回退 PaddleOCR 中英文通用模型 `ch`。
-- 领域元数据使用 `zh/en`，只在 MinerU 适配边界映射为供应商参数 `ch/en`；自动模式必须
-  准备中英文两套 OCR 权重。
-- 语言判断失败不能终止流程；英文权重缺失但中文权重完整时降级到 `ch`。MinerU 失败时
-  普通文字 PDF 可降级 PyMuPDF；扫描件仍无正文时记录单篇失败，批处理继续下一篇，并且
-  空结果不得伪装成成功。
-- 为兼容 `uv` 的通用解析，项目 Python 支持范围为 `>=3.10,<3.14`，并在
-  `[tool.uv]` 中允许 MinerU 所需的预发布依赖。
+  OpenAI-compatible LLM 配置；`uv` 管理环境（不用 Conda）；Python `>=3.10,<3.14`，
+  `[tool.uv]` 允许 MinerU 预发布依赖。
+- 按可运行的依赖顺序重建；核心 RAG 优先，随后扩展 Discovery、Wiki、反馈、主动
+  Agent、交付物和 DeerFlow；不讲 DeerFlow 前端及无关上游功能。
+- 所有教学文本使用中文；以运行行为、公开接口、测试和评测为等价标准，不要求源文件
+  字节级一致。
+- MinerU 生产默认 `.venv/bin/magic-pdf`、强制 `ocr` 模式和 CUDA GPU；模型下载到
+  项目自己的 `data/index/mineru_models/`。
+- 语料中英混合：纯扫描 PDF 由人工在 `meta.json` 顶层标注 `language: "zh"|"en"`；
+  应用配置 `mineru.lang: auto|ch|en`，`auto` 优先人工元数据、其次 PyMuPDF 采样、
+  失败回退 `ch`；领域元数据用 `zh/en`，仅在 MinerU 边界映射 `ch/en`。
+- 语言判断失败不终止流程；MinerU 失败可降级 PyMuPDF；扫描件无正文记录单篇失败、
+  批处理继续；空结果不得伪装成功。
 
 ## 协作规则
 
-- 用户负责创建/修改 `src/paper_rag/` 下的正式功能文件，并执行所有 Git 命令。
-- 助手直接创建/修改测试文件和 `scripts/` 下所有脚本，无需逐次申请写入权限；助手不得
-  代写 `src/paper_rag/` 正式功能文件。
-- 用户亲自运行安装、测试、Demo 和服务命令，除非明确要求助手代为执行。
-- 助手可在用户明确要求“更新进度”时维护并单独提交本文件，但不得提交其他文件。
+- 用户创建/修改 `src/paper_rag/` 正式功能文件，执行所有安装、测试、Demo、服务命令
+  和业务 Git 命令。
+- 助手直接创建/修改测试文件和 `scripts/` 下所有脚本并自测；不得代写 `src/paper_rag/`
+  正式功能文件。
+- 用户明确要求"更新进度"时，助手维护并单独提交课程文档（本文件与
+  `docs/learning/` 归档），提交不得包含业务文件。
 - 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
 - Git message 使用 Conventional Commits：`<type>(<scope>): <中文摘要>`。
-
-## P4 固化顺序
-
-P4 必须按完整数据流推进，不得因为解析器可以直接读取现成 PDF 而跳过真实采集：
-
-1. **采集抽象契约**：`tests/test_ingest_sources.py` ->
-   `src/paper_rag/ingest/sources.py`。
-2. **本地 PDF 采集**：边界测试 -> `src/paper_rag/ingest/local_source.py` -> 真实 Demo ->
-   无 mock 集成测试。验证文件复制、内容哈希 ID、标准目录、`meta.json`、`source.txt`
-   与重复执行幂等性。
-3. **PDF URL 采集**：边界测试 -> `src/paper_rag/ingest/url_source.py` -> 真实 HTTP Demo ->
-   无 mock 集成测试。验证重定向、下载、HTTP 错误、PDF 落盘和临时文件清理。
-4. **arXiv 采集**：边界测试 -> `src/paper_rag/ingest/arxiv_source.py` -> 真实 arXiv Demo ->
-   无 mock 集成测试。验证 ID 归一化、元数据、版本信息、PDF 下载和重复执行。
-5. **OpenAlex 采集**：边界测试 -> `src/paper_rag/ingest/openalex_source.py` -> 真实 API Demo
-   -> 无 mock 集成测试。验证 DOI/Work 查询、倒排摘要还原和开放 PDF 行为。
-6. **Semantic Scholar 采集**：边界测试 ->
-   `src/paper_rag/ingest/semantic_scholar_source.py` -> 真实 API Demo -> 无 mock 集成测试。
-   验证多种标识符、元数据和开放 PDF 行为。
-7. **解析**（✅ 2026-07-31 完成）：`src/paper_rag/parse/__init__.py`、PyMuPDF 降级解析、
-   MinerU 本地解析（含中英文语言路由与真实 GPU OCR 验收）和解析调度器均已提交。
-8. **切块**（← 当前）：依次实现 section splitter、text chunker、contextual chunk、
-   builder、sanity 和 multimodal chunker。
-
-阶段门禁：五类具体采集器的真实 Demo、无 mock 集成测试和 Ruff 检查没有全部通过前，
-不得把当前课次推进到解析；解析未完成真实验收前，不得进入切块。
-**解析门禁已于 2026-07-31 满足**：真实 GPU 双语 OCR（Task 14）、调度器降级与失败隔离
-（Task 15）、干净 HEAD 快照解析层 55 passed 均已通过，课程正式进入切块。
-
-临时门禁例外：2026-07-29 用户暂时没有 Semantic Scholar API key，并明确要求先跳过。
-因此课程可以继续解析，但 Semantic Scholar 不能标记为完整 checkpoint；在最终后端验收前
-必须回补真实 Demo、无 mock 集成测试、Ruff 检查和独立真实验收提交。
+- 提交新模块必须同时提交包入口 `__init__.py`（解析层教训：克隆即失败）；验证手段是
+  `git archive HEAD | tar -x -C /tmp/<snapshot>` 后在快照里实跑聚焦测试。
 
 ## 强制验收协议
 
-对存在依赖边界或外部副作用的功能，必须按以下顺序学习、实现和验收：
+对存在依赖边界或外部副作用的功能，按顺序：**边界测试**（可 mock，只证接口设计）→
+**生产实现** → **真实 Demo**（`scripts/demo_*.py`，真实服务/数据/公共 API，隔离临时
+数据并清理，断言 + 非零退出码）→ **真实集成测试**（无 mock 的 `tests/test_*_real.py`，
+`uv run pytest -vv -s` 单独运行；缺服务/密钥时明确失败，不能 skip 后宣称验收）→
+**checkpoint**（全部通过 + Ruff 才提交）。纯函数可仅用单元测试，但应在调用它的真实
+链路 Demo 中得到覆盖。SQLite 用真实临时库；Qdrant 用真实 Docker/embedded 与隔离
+collection；LLM、嵌入、MinerU 用真实配置/模型/API。
 
-1. **边界测试**：在生产代码前可使用 mock，明确输入、输出、异常分支与依赖调用
-   契约。它只证明接口设计，不是功能完成证据。
-2. **生产实现**：实现最小功能，使边界测试通过。
-3. **真实 Demo**：在生产实现后新增可直接运行的 `scripts/demo_*.py`。它必须使用
-   真实服务、真实数据和公共 API，逐步打印数据流与结果，并通过断言和非零退出码
-   表示失败。Demo 必须使用隔离的临时数据或专用 collection，并负责清理，不能污染
-   正式运行数据。
-4. **真实集成测试**：新增无 mock 的 `tests/test_*_real.py`（也可放在
-   `tests/integration/`），验证与 Demo 相同的关键不变量。使用
-   `uv run pytest -vv -s <目标文件>` 单独运行，以显示每个用例和输出；服务、模型或
-   密钥未准备好时必须明确失败，不能 skip 后宣称验收完成。
-5. **checkpoint**：只有边界测试、真实 Demo、真实集成测试和适用的 Ruff 检查均通过，
-   才能提交该功能的 Git checkpoint。
+## P4 固化顺序
 
-适用示例：SQLite 使用真实临时数据库文件；Qdrant 使用真实 Docker 或 embedded
-实例和隔离 collection；LLM、嵌入、MinerU 等使用真实配置、真实模型或真实 API。
-纯函数可仅使用单元测试，但应在调用它的真实链路 Demo 中得到覆盖。
+1–6 采集（抽象契约、本地 PDF、URL、arXiv、OpenAlex、Semantic Scholar 边界）与
+7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）均已完成，提交清单见归档。
+当前为 8 切块：section splitter → text chunker → contextual → builder → sanity →
+multimodal chunker。
 
-## 已完成的验证
-
-- 已确认基准工作区是无 Git 历史的源码快照。
-- 已创建独立 Git 工作区和 `docs/learning/`、`docs/superpowers/plans/` 目录。
-- `pyproject.toml` 已创建并通过 TOML 解析；`paper_rag` 包入口可导入并输出
-  `0.1.0.dev0`。
-- `README.md` 已创建；`uv sync --extra dev` 成功并生成 `uv.lock`。
-- `src/paper_rag/utils/ids.py` 已实现；`tests/test_ids.py` 已通过（5 passed）。
-- `src/paper_rag/utils/logger.py` 已实现并通过手工日志验证。
-- `src/paper_rag/utils/hf_cache.py` 已实现；`tests/test_hf_cache.py` 已通过。
-- `config/default.yaml`、`src/paper_rag/config.py` 和 `tests/test_config.py` 已实现；
-  配置测试通过（3 passed），Ruff 检查通过。
-- `src/paper_rag/utils/paths.py` 与 `tests/test_paths.py` 已实现；聚焦测试通过
-  （3 passed），基础模块回归测试及 Ruff 检查通过。
-- `src/paper_rag/ingest/__init__.py`、`schema.py` 与领域模型测试已完成；
-  `tests/test_ingest_schema.py` 通过（4 passed）。
-- `src/paper_rag/ingest/dedup.py` 与测试已完成；聚焦测试通过（2 passed）。
-- P2 阶段全量 `uv run pytest -q` 通过，`uv run ruff check src tests` 通过。
-- `src/paper_rag/store/__init__.py` 已创建并通过导入与 Ruff 验证。
-- `src/paper_rag/store/sqlite_store.py` 已按三个 TDD 切片完成：论文与状态、
-  ingest 步骤与跨来源查重、Section/Chunk 快照及旧库迁移。
-- `tests/test_sqlite_store.py` 最终通过（9 passed）；全量 `uv run pytest -q`
-  通过，SQLite 实现与测试的聚焦 Ruff 检查通过。
-- `src/paper_rag/store/qdrant_store.py` 边界测试通过（12 passed）；真实 Docker
-  Qdrant Demo 已验证 1024 维向量写入、Cosine 排序、metadata 过滤、按论文删除和
-  collection 清理；无 mock 的 `tests/test_qdrant_store_real.py` 已通过。
-- Qdrant 真实 Demo 暴露并修复了 Loguru 不解析 `%s` 的日志格式问题；修复后 Demo、
-  边界测试与 Ruff 均重新通过。
-- `scripts/init_store.py` 与 `tests/test_init_store.py` 已完成，边界测试通过（4 passed）；
-  其中 SQLite 用真实临时数据库验证，Qdrant collection 与主流程顺序使用边界 fake。
-- `scripts/init_store.py` 已连接真实 SQLite 与 Qdrant 连续运行两次，验证初始化流程的
-  幂等行为；无 mock 的 `tests/test_init_store_real.py` 已纳入初始化 checkpoint。
-- 存储初始化文件已提交为 `6d0b8e2 feat(store): 实现存储初始化入口与真实验收`，P3
-  阶段结束，课程进入 P4。
-- `src/paper_rag/ingest/sources.py` 已建立 `PaperSource.fetch()` 抽象契约；接口测试通过。
-- `src/paper_rag/ingest/local_source.py` 已完成：使用真实本地 PDF 验证内容哈希 ID、
-  `raw.pdf`、`meta.json`、`source.txt` 和重复采集幂等性；边界测试 4 项及无 mock
-  集成测试均通过，并提交为 `71d1b95 feat(ingest): 实现本地PDF采集与真实验收`。
-- `src/paper_rag/ingest/url_source.py` 已完成：边界测试通过 4 项；真实 Demo 与无 mock
-  集成测试均直接采集 ACL Anthology 的
-  `https://aclanthology.org/2025.acl-long.426.pdf`，验证公网 HTTPS 下载、PDF 有效性、
-  内容哈希 ID 和标准落盘，并提交为
-  `9644520 feat(ingest): 实现PDF URL采集与真实验收`。
-- `src/paper_rag/ingest/arxiv_source.py` 已完成：边界测试、交互式真实 arXiv Demo 和
-  无 mock 公网集成测试均通过；验证 arXiv ID 与版本归一化、稳定 `paper_id`、真实
-  元数据、PDF 下载、标准落盘和重复采集复用，并提交为
-  `698d611 feat(ingest): 实现 arXiv PDF 采集器与真实验收`。
-- `src/paper_rag/ingest/openalex_source.py` 已完成：边界测试、交互式真实 OpenAlex Demo
-  和无 mock 公网集成测试均通过。真实测试分别验证 metadata-only 与 metadata+PDF
-  两条路径，并使用 PyMuPDF 打开 J-STAGE 的真实 PDF。
-- OpenAlex 真实测试发现 `open_access.oa_url` 可能是 DOI 落地页而非 PDF；已通过新增
-  RED 用例修正为依次读取 `best_oa_location.pdf_url`、
-  `primary_location.pdf_url`、`locations[].pdf_url`，同时保留落地页作为元数据 URL，
-  不再错误下载 DOI 页面。OpenAlex 已提交为
-  `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`。
-- `src/paper_rag/ingest/semantic_scholar_source.py` 已完成边界实现：支持 arXiv URL、
-  `arxiv:`、`doi:`、裸 DOI 和 S2 Paper ID；根据 API 返回的 ArXiv、DOI、S2 ID
-  优先级生成稳定 `paper_id`，映射标准元数据，并支持开放 PDF 下载与已有 PDF 复用。
-- `tests/test_semantic_scholar_source.py` 边界测试通过（4 passed），覆盖 API key 请求头、
-  标识符归一化、metadata-only、S2 ID 降级和 PDF 幂等复用；已提交为
-  `e45e6ac feat(ingest): 实现 Semantic Scholar 采集边界`。
-- `src/paper_rag/parse/__init__.py` 已创建并通过包入口测试，保持解析后端的延迟导入
-  边界。
-- `src/paper_rag/parse/fallback_pymupdf.py` 已实现：使用真实 PyMuPDF 创建和读取 PDF，
-  按页生成 `paper.md` 与页标记，清理 NUL 字符并保证重复解析稳定；边界测试和允许用户
-  选择本地 PDF 的 `scripts/demo_fallback_pymupdf.py` 已通过真实验收。
-- `src/paper_rag/parse/mineru_local.py` 已完成四个内部切片：运行时缓存环境、CLI 定位、
-  错误分类与诊断数据结构；MinerU 原始 Markdown/图片/layout 发现和标准化；真实
-  `subprocess.run()` 解析调度、超时、非零退出和空产物拒绝；以及 Doctor 的依赖、模型
-  目录、布局权重、按语言的 OCR 权重、CLI 版本和报告汇总。Task 10 目标回归中
-  `tests/test_mineru_local.py` 已通过（25 passed）。
-- `scripts/demo_mineru_local.py` 已创建，支持交互输入本地 PDF、默认强制 OCR、隔离或
-  持久化输出，并检查标准化 Markdown、figures、layout 与原始产物；Ruff 和 `--help`
-  启动检查通过，但尚未运行真实解析。
-- MinerU 依赖已通过
-  `uv sync --extra dev --extra ingest --extra mineru` 安装；实际 CLI 是
-  `.venv/bin/magic-pdf`，安装版本为 `magic-pdf 1.3.12`。
-- 用户已在宿主环境确认 PyTorch `2.13.0+cu130`、CUDA 13.0 可用，并识别到
-  `NVIDIA RTX PRO 6000 Blackwell Workstation Edition`。
-- `config/default.yaml` 已将 MinerU CLI 改为 `magic-pdf`、解析模式改为 `ocr`；
-  `config/magic-pdf.json` 已配置 `device-mode: cuda`、项目内模型目录、
-  `doclayout_yolo`，并保持表格和公式识别关闭。`tests/test_mineru_gpu_config.py`
-  已通过（2 passed）。
-- MinerU Doctor 的第四段边界测试已追加到 `tests/test_mineru_local.py`，覆盖依赖导入、
-  模型根目录、布局权重、按语言选择的 OCR 检测/识别权重、CLI 版本和报告汇总；用户
-  已确认最终 GREEN 为 `23 passed, 13 warnings`。
-- `scripts/mineru_doctor.py` 已按五个 TDD 切片完成：JSON 输出、人类可读报告、
-  `--strict` 退出码、`--try-parse` 成功/失败结构，以及终端试解析结果。用户已确认
-  `tests/test_mineru_doctor_script.py` 全部通过（7 passed），Ruff 与 `--help` 入口也已通过。
-- 真实 Doctor 已运行：CLI、完整 MinerU 依赖、OpenCV、配置文件和 CLI 版本检查通过；
-  因模型目录不存在及 OCR 语言尚未配置而准确返回 `ok: False`，`--strict` 退出码为 `1`。
-- 用户补充语料为中英文混合集合，并确认纯扫描件有人工语言元数据、普通 PDF 由系统自动
-  判断；无法判断时使用 `ch`，且采用单篇失败隔离和 PyMuPDF 降级策略。
-- 双语设计文档
-  `docs/superpowers/specs/2026-07-30-bilingual-mineru-language-routing-design.md` 已确认并提交为
-  `e12284d docs(parse): 设计中英文 OCR 语言路由与降级策略`。
-- 双语实施计划
-  `docs/superpowers/plans/2026-07-30-bilingual-mineru-language-routing.md` 已生成、自审并提交为
-  `ddff85b docs(parse): 规划中英文 OCR 语言路由实施步骤`。计划共 15 个逐文件任务，
-  固定官方模型仓库修订 `a4f6a8d29a4d96730f90ea174a9322e842b93552`，明确七个布局、
-  LayoutReader 和中英文 OCR 文件。
-- Task 1 已提交为 `13dd3a6 feat(config): 支持 MinerU OCR 语言自动路由`：
-  `mineru.lang` 配置值域为 `auto | ch | en`，默认值改为 `auto`。
-- Task 2 已提交为 `8afa910 feat(ingest): 为论文元数据添加语言字段`：
-  `PaperMeta.language` 支持领域语言 `zh/en/None` 并拒绝供应商值 `ch`。
-- Task 3 已提交为 `381f748 feat(ingest): 保留论文人工语言标注`：
-  新增 `src/paper_rag/ingest/metadata.py`，统一写入 `meta.json` 并保留已有人工语言。
-- Task 4 已提交为 `3931b6a refactor(ingest): 统一本地论文元数据持久化`：
-  本地 PDF 采集器改用统一元数据持久化函数，重复采集保留人工语言。
-- Task 5 已提交为 `e193b7f refactor(ingest): 统一 URL 论文元数据持久化`：
-  URL PDF 采集器改用统一元数据持久化函数。
-- Task 7 已提交为 `d8b2673 refactor(ingest): 保留 OpenAlex 论文语言元数据`：
-  OpenAlex 采集器映射可信 `zh/en` 语言并保留人工标注。
-- Task 8 已提交为 `7a88b37 refactor(ingest): 统一 Semantic Scholar 元数据持久化`：
-  Semantic Scholar 采集器改用统一元数据持久化函数；真实 API 验收仍等待 API key。
-- Task 9 已提交为 `5abecae feat(parse): 实现中英文 OCR 语言自动判断`：
-  `resolve_ocr_language()` 支持强制 `ch/en`、人工元数据优先、PyMuPDF 文本采样和失败
-  回退到 `ch`，对应测试覆盖中英文、扫描件、损坏元数据与损坏 PDF。
-- Task 10 已提交为 `8ce42b1 feat(parse): 诊断 Mineru 中英文OCR权重`：Doctor 的
-  `auto` 模式展开检查 `ch/en` 四个 OCR 权重，新增 OCR 权重路径/可用性函数和
-  LayoutReader 两个文件检查，并接入 `diagnose()`。本轮复核
-  `tests/test_mineru_local.py` 为 25 passed，`tests/test_mineru_doctor_script.py` 为
-  7 passed，Task 10 目标 Ruff 与 `git diff --check` 均通过；但只包含提交 `8ce42b1` 的
-  `/tmp` 干净快照中 `tests/test_mineru_local.py` 为 24 passed、1 failed，聚合测试因
-  `config/magic-pdf.json` 未被提交而缺少 `models-dir` 检查。生产实现未发现对应行为错误，
-  测试必须改为自建临时配置后再确认 Task 10 checkpoint。
-- Task 10 测试可复现性已修复并提交为 `7207705 feat(parse): 诊断 MinerU 中英文 OCR 权重`：
-  Doctor 聚合测试改为用 `tmp_path` 自建临时 `config/magic-pdf.json` 并 monkeypatch
-  `cfg.PROJECT_ROOT`，不再依赖未跟踪配置；干净快照复核通过。
-- Task 11 已提交为 `768548d feat(parse): 按论文选择 MinerU OCR 语言`：新增
-  `_select_available_ocr_language()`，CLI 不再接收 `auto`；英文权重缺失且中文可用时降级
-  `ch` 并写出含 `model_fallback` 的 `language.json`。`test_mineru_local.py` 与
-  `test_parse_language.py` 共 35 passed，目标 Ruff 通过。
-- Task 12 已提交为 `ba4d0fb feat(parse): 增加 MinerU 双语模型下载入口`：
-  `scripts/download_mineru_models.py` 固定官方修订 `a4f6a8d…`，含 7 个权重的远端/本地映射、
-  大小校验、`.part` 原子替换与复用；`tests/test_download_mineru_models.py` 3 passed，Ruff
-  与 `--help` 通过。（脚本由助手编写，修复了用户初稿 `cached = Path` 的断裂调用。）
-- Task 13 真实模型已下载到 `data/index/mineru_models/`：LayoutReader `model.safetensors`
-  约 713MB、`ch/en` 四套 OCR 权重、YOLO 布局等共 7 个文件均非空；`mineru_doctor.py
-  --strict` 全部 `[OK]`、退出码 0；`data/` 未进入 Git。Task 13 为 runtime-only，无代码提交。
-- Task 14 已提交为 `2e147af test(parse): 验收 MinerU 中英文 GPU OCR`：
-  `scripts/demo_mineru_local.py` 增加 `--lang auto|ch|en`、打印逐篇语言路由并校验
-  `language.json`；`tests/test_mineru_bilingual_real.py` 为无 mock 双语真实测试，缺环境
-  变量时明确失败不 skip。用户已在真实 GPU 上运行 Demo 与集成测试通过：英文
-  `en/pdf_text`、中文 `ch/metadata`，`paper.md` 非空、`language.json` 记录完整。
-- Task 15 已提交为 `c9c0c24 feat(parse): 实现解析后端降级与失败隔离`：
-  `dispatcher.parse_pdf()` 返回 `(Path, parser_name)`；MinerU 成功→`succeeded/mineru`，
-  MinerU 失败且 PDF 有正文→`degraded/pymupdf` 并保留 MinerU 原因，扫描件或降级空正文→
-  `failed` 且抛 `ParseError`，禁用 fallback 时原样重抛 `MineruError`。
-  `_has_meaningful_markdown()` 用正则剔除 `<!-- page N -->` 后判定实义正文，杜绝空结果
-  伪装成功。`tests/test_parse_dispatcher.py` 9 passed（MinerU 用假实现，PyMuPDF 降级链路
-  用真实 PyMuPDF 与真实临时 PDF）。
-- `scripts/demo_parse_dispatcher.py` 为**零 mock** 真实降级 Demo：生成临时配置把
-  `mineru.cli` 指向不存在的可执行文件，让生产 `_resolve_cli()` 真实返回 `None` 并抛
-  `MineruError`；解析输出隔离到 `tempfile.mkdtemp()` 并在结束时清理。退出码语义为
-  `0` 降级成功、`1` 不变量被破坏、`2` 所有后端均无正文（扫描件的正确结果，仍按协议以
-  非零退出码报告）。助手自测：文字 PDF `degraded/pymupdf` 9 项不变量全 OK、EXIT=0；
-  空白扫描件 `failed/pymupdf`、EXIT=2。
-- 2026-07-31 发现并修复**解析层可复现性缺口**：`git ls-files` 显示
-  `src/paper_rag/parse/__init__.py` 与 `fallback_pymupdf.py` 从未进入 Git，而依赖它们的
-  `mineru_local.py`、`language.py`、`dispatcher.py` 早已提交。干净 HEAD 快照实测
-  `ModuleNotFoundError: No module named 'paper_rag.parse.fallback_pymupdf'`，即调度器降级
-  路径在任何新克隆上都是死代码。已按四个独立提交补齐（见 Git 状态说明），补齐后
-  `git archive HEAD` 干净快照实跑解析层七个测试文件 **55 passed**，缺口关闭。
-- 四个补提交的边界已逐个核对无夹带；`git check-ignore -v` 验证六个 `demo-*-data/` 命中
-  `.gitignore:131`、`data/index/mineru_models` 命中 `.gitignore:6`；已跟踪文件按体积排序
-  最大为 `uv.lock`（约 1MB），无 PDF、模型权重或解析产物进入 Git 历史。
+阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
+Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、
+无 mock 集成测试与独立提交。
 
 ## 待处理问题
 
-- **下一步是切块切片 0+1 的 RED 测试**：基准 `chunk/` 已读，切片方案、中文扩展约束
-  与页码归属方案 A 均已于 2026-08-01 确认（见"切块层已确认方案"）。解析层新增
-  `page_markers.py` 小课次安排在 `builder.py` 之前，不插队当前 splitter 课次。
-- `src/paper_rag/ingest/arxiv_source.py` 仍有未提交的 Task 6 元数据持久化迁移 diff
-  （6 insertions / 11 deletions）；不要被后续提交顺带纳入，应作为独立提交，并配套单独
-  规划 `fix(ingest): 为 arXiv 真实请求增加超时`。用户已知悉，暂缓处理。
-- Semantic Scholar 真实验收仍未完成：缺少 API key；
-  `scripts/demo_semantic_scholar_source.py` 已创建但未提交，且尚未创建无 mock 的
-  `tests/test_semantic_scholar_source_real.py`。不得将该采集源标记为完整完成。
-- 2026-07-31 Task 6 arXiv 真实验收出现外部网络卡顿：
-  `uv run pytest -vv -s tests/test_arxiv_source_real.py` 卡在
-  `[2/5] 查询真实 arXiv API 并下载 PDF` 后的 `ArxivSource().fetch()`。排查结论是
-  通用网络可用，但 arXiv 真实端点不稳定：`export.arxiv.org/api/query` 的部分查询形式
-  会超时，`arxiv` Python 包 4.0.0 内部 `requests.Session.get()` 没有显式 timeout，
-  慢链路会表现为长时间卡住。探针证据：`curl -I --max-time 20
-  'https://export.arxiv.org/api/query?search_query=id:1706.03762'` 超时；
-  `curl -I --max-time 20 'https://export.arxiv.org/api/query?id_list=1706.03762'`
-  返回 200；`arxiv.Client(...).results(Search(id_list=['1706.03762']))` 曾耗时约
-  17 秒才返回；PDF 端点可达但下载偏慢。当前判断：这不是 Task 6 元数据持久化迁移引入的
-  逻辑问题，应单独规划 `fix(ingest): 为 arXiv 真实请求增加超时`，不要混入 Task 6
-  迁移提交。
-- `AGENTS.md`、`CLAUDE.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
-- 六个 `demo-*-data/` 目录是用户保留的真实产物，已由 `.gitignore` 的 `demo-*-data/`
-  忽略；`data/`（含 MinerU 模型权重）由第 6 行忽略。两者都不得删除或纳入 Git。
+- `src/paper_rag/ingest/arxiv_source.py` 有未提交的 Task 6 元数据持久化迁移 diff
+  （6 insertions / 11 deletions）；必须作为独立提交，不得被顺带纳入。另需单独规划
+  `fix(ingest): 为 arXiv 真实请求增加超时`（arXiv 端点不稳定 + `arxiv` 包无显式
+  timeout，诊断细节见归档）。用户已知悉，暂缓处理。
+- Semantic Scholar 真实验收未完成：缺 API key；`scripts/demo_semantic_scholar_source.py`
+  已创建未提交，`tests/test_semantic_scholar_source_real.py` 未创建。恢复点：取得
+  API key 后先跑 Demo，再补无 mock 集成测试。
+- `AGENTS.md`、`CLAUDE.md`、`scripts/demo_semantic_scholar_source.py` 为未跟踪文件，
+  助手不得擅自纳入提交。
 - 全量测试须用 `uv run python -m pytest`（把工作目录纳入 sys.path），否则
-  `scripts.init_store` 相关用例会因 `scripts/` 未安装为包而导入失败。真实测试
-  （`tests/test_*_real.py`、`tests/test_mineru_bilingual_real.py`）在缺服务/密钥/环境变量
-  时按约定明确失败、不 skip，需单独运行。全量 Ruff 仍有既有历史问题位于
-  `scripts/demo_qdrant_store.py`、`src/paper_rag/ingest/arxiv_source.py`、
-  `src/paper_rag/store/qdrant_store.py`，不在当前任务范围，勿混入后续提交。
-- 提交新模块时必须同时提交**包入口 `__init__.py`**。解析层的教训是：功能文件提交了、
-  包入口没提交，本地因未跟踪文件仍能跑通，克隆即失败。切块层新建
-  `src/paper_rag/chunk/__init__.py` 时不要重蹈覆辙。验证手段是
-  `git archive HEAD | tar -x -C /tmp/<snapshot>` 后在快照里实跑聚焦测试。
-
-## Git 状态说明
-
-- `909c8f2 feat(core): 初始化项目骨架与基础工具`
-- `0deae55 fix(utils): 修复模型缓存模块的导入顺序`
-- `d4978f0 feat(config): 实现类型化配置加载`
-- `d2958c9 docs(config): 补充数据目录配置说明`
-- `826e5c0 feat(utils): 实现运行时路径管理`
-- `d8ce9a5 feat(ingest): 定义论文采集的数据模型`
-- `6d8d2ca feat(ingest): 实现论文采集去重判断`
-- `2f510c3 chore(style): 规范基础工具与测试文件格式`
-- `24bd07b feat(store): 实现SQLite 元数据与内容存储`
-- `1262c23 chore(style): 修正注释中的易混淆标点`
-- `7d86734 feat(store): 实现 Qdrant 向量存储与真实验收`
-- `6d0b8e2 feat(store): 实现存储初始化入口与真实验收`
-- `71d1b95 feat(ingest): 实现本地PDF采集与真实验收`
-- `9644520 feat(ingest): 实现PDF URL采集与真实验收`
-- `698d611 feat(ingest): 实现 arXiv PDF 采集器与真实验收`
-- `3f4de48 feat(ingest): 实现 OpenAlex 采集与真实验收`
-- `e45e6ac feat(ingest): 实现 Semantic Scholar 采集边界`
-- `e12284d docs(parse): 设计中英文 OCR 语言路由与降级策略`
-- `ddff85b docs(parse): 规划中英文 OCR 语言路由实施步骤`
-- `13dd3a6 feat(config): 支持 MinerU OCR 语言自动路由`
-- `8afa910 feat(ingest): 为论文元数据添加语言字段`
-- `381f748 feat(ingest): 保留论文人工语言标注`
-- `3931b6a refactor(ingest): 统一本地论文元数据持久化`
-- `e193b7f refactor(ingest): 统一 URL 论文元数据持久化`
-- `d8b2673 refactor(ingest): 保留 OpenAlex 论文语言元数据`
-- `7a88b37 refactor(ingest): 统一 Semantic Scholar 元数据持久化`
-- `5abecae feat(parse): 实现中英文 OCR 语言自动判断`
-- `8ce42b1 feat(parse): 诊断 Mineru 中英文OCR权重`
-- `7207705 feat(parse): 诊断 MinerU 中英文 OCR 权重`（Task 10 测试可复现性修复）
-- `768548d feat(parse): 按论文选择 MinerU OCR 语言`（Task 11）
-- `ba4d0fb feat(parse): 增加 MinerU 双语模型下载入口`（Task 12）
-- `2e147af test(parse): 验收 MinerU 中英文 GPU OCR`（Task 14；Task 13 为 runtime-only 无提交）
-- `fcb4122 docs(course): 记录 Task 11-14 完成并规划 Task 15`
-- `c9c0c24 feat(parse): 实现解析后端降级与失败隔离`（Task 15，双语 OCR 计划收尾）
-- `75242f9 feat(parse): 实现解析包入口与 PyMuPDF 兜底解析`（补提交，修复克隆即失败）
-- `646cb94 feat(parse): 增加 MinerU 环境诊断脚本`（补提交）
-- `fa4652f chore(git): 忽略本地 Demo 真实产物目录`（补提交 `.gitignore`）
-- `12cd6bb chore(parse): 提交 MinerU GPU 运行配置`（补提交 `config/magic-pdf.json`）
-- 课程状态提交不得包含业务文件。
+  `scripts.init_store` 用例导入失败。真实测试缺服务/密钥时按约定明确失败不 skip，
+  需单独运行。全量 Ruff 的既有历史问题位于 `scripts/demo_qdrant_store.py`、
+  `src/paper_rag/ingest/arxiv_source.py`、`src/paper_rag/store/qdrant_store.py`，
+  不在当前任务范围，勿混入后续提交。
 
 ## 每次课结束必须更新
 
 - 当前阶段和课次。
-- 本次完成的目标文件及其接口/行为验证证据。
+- 本次完成的目标文件及其接口/行为验证证据（详细记录写入归档，本文件只留当前态）。
 - 执行的命令、通过/失败结果和原因。
 - 新出现的设计疑问、待复习概念和下一个目标文件。

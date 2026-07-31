@@ -1,9 +1,9 @@
 """章节切分器的行为契约测试。
 
-切片 1: markdown 标题主路径 + 无标题兜底。
+切片 1: markdown 标题主路径(`#{1,4} Title`) + 无标题兜底。
+切片 2: 英文纯文本标题(PyMuPDF 降级产物)四形态与守卫。
 输入是解析层产出的 `parsed/<paper_id>/paper.md` 全文; 输出是按文档顺序排列的
-`RawSection` 列表。本切片只覆盖 MinerU 产出的 markdown 标题(`#{1,4} Title`),
-纯文本标题(PyMuPDF 降级产物)留给切片 2, 中文纯文本规则留给切片 5。
+`RawSection` 列表。标题清洗与描述性合法性留给切片 3, 中文纯文本规则留给切片 5。
 
 接口约定(切块层已确认方案, 2026-08-01):
 
@@ -155,3 +155,144 @@ def test_language_hint_is_keyword_only() -> None:
     # 领域语言提示必须显式命名传入, 防止和未来的位置参数混淆
     with pytest.raises(TypeError):
         mod.split_sections("# Introduction\n\ntext\n", "zh")
+
+
+# ---------------------------------------------------------------------------
+# 切片 2: 英文纯文本标题(PyMuPDF 降级产物)
+#
+# 四种形态: 行内 Abstract / 孤立编号行+标题行 / 行内编号标题 / 裸规范标题。
+# 守卫: 段落边界、Table 上下文。first-abstract 守卫与描述性标题合法性耦合,
+# 一并放到切片 3; 本切片的合法性判定只需规范标题白名单。
+# 孤立编号形态与裸规范标题会在同一个标题行上重叠, 因此本切片需要最小的
+# 重叠去重(后一个标题落在前一个标题区间内时丢弃); markdown 优先级与
+# References 尾部过滤仍在切片 4。
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("sep", ["—", ":", "-"])  # — = em dash 破折号
+def test_inline_abstract_starts_abstract_section(sep: str) -> None:
+    mod = _splitter_module()
+    md = (
+        "Great Paper Title\n"
+        "Alice and Bob\n"
+        "\n"
+        f"Abstract{sep} We study retrieval methods.\n"
+        "\n"
+        "More abstract text.\n"
+    )
+
+    sections = mod.split_sections(md)
+
+    assert [s.name for s in sections] == ["Abstract"]
+    assert sections[0].level == 1
+    # 标题只吞掉 "Abstract" 与分隔符, 同一行剩余文字属于正文
+    assert sections[0].body == "We study retrieval methods.\n\nMore abstract text."
+
+
+def test_standalone_number_line_followed_by_title_line() -> None:
+    mod = _splitter_module()
+    md = "Some preamble text.\n\n1.\nIntroduction\n\nIntro body.\n\n2.1\nEvaluation\n\nEval body.\n"
+
+    sections = mod.split_sections(md)
+
+    # 编号行与下一行标题合并为一个标题, 编号行不进入任何 body;
+    # 标题行自身也会命中裸规范标题规则, 依赖最小重叠去重只留一个
+    assert [s.name for s in sections] == ["Introduction", "Evaluation"]
+    assert [s.level for s in sections] == [1, 2]
+    assert sections[0].body == "Intro body."
+    assert sections[1].body == "Eval body."
+    for s in sections:
+        assert md[s.start : s.end].strip() == s.body
+
+
+def test_inline_numbered_title_line() -> None:
+    mod = _splitter_module()
+    md = "2. Related Work\n\nPrior systems exist.\n\n2.1 Evaluation\n\nSetup details.\n"
+
+    sections = mod.split_sections(md)
+
+    assert [s.name for s in sections] == ["Related Work", "Evaluation"]
+    # 层级只看编号本身: "2." 一级, "2.1" 二级。基准把整行传给层级计算,
+    # "2. Related Work" 被误判为二级; 重建版修正为只用编号计算
+    assert [s.level for s in sections] == [1, 2]
+    assert sections[0].body == "Prior systems exist."
+    assert sections[1].body == "Setup details."
+
+
+def test_bare_canonical_heading_requires_paragraph_boundary() -> None:
+    mod = _splitter_module()
+    # 前一行是空行, 构成段落边界, 是标题
+    with_boundary = "Preamble text.\n\nMethod\n\nMethod body.\n"
+    sections = mod.split_sections(with_boundary)
+    assert [s.name for s in sections] == ["Method"]
+    assert sections[0].body == "Method body."
+
+    # 紧跟在普通文字后面, 只是断行句子的一部分, 不是标题
+    without_boundary = "We call this the\nMethod\nof our system.\n"
+    assert [s.name for s in mod.split_sections(without_boundary)] == ["Body"]
+
+
+def test_page_marker_counts_as_paragraph_boundary() -> None:
+    mod = _splitter_module()
+    md = "Earlier paragraph text.\n<!-- page 3 -->\nConclusion\n\nFinal remarks.\n"
+
+    sections = mod.split_sections(md)
+
+    # 页标记等价于段落边界: 标题常出现在换页后第一行
+    assert [s.name for s in sections] == ["Conclusion"]
+    assert sections[0].body == "Final remarks."
+
+
+def test_abstract_and_references_ignore_boundary_guards() -> None:
+    mod = _splitter_module()
+    # PyMuPDF 提取常把 References 紧贴上一段落, 这两个词永远按标题处理
+    md = "The sentence runs into\nReferences\n[1] Someone. 2024.\n"
+    sections = mod.split_sections(md)
+    assert [s.name for s in sections] == ["References"]
+    assert sections[0].body == "[1] Someone. 2024."
+
+    md2 = "Great Paper Title\nAbstract\nWe study retrieval methods.\n"
+    sections2 = mod.split_sections(md2)
+    assert [s.name for s in sections2] == ["Abstract"]
+    assert sections2[0].body == "We study retrieval methods."
+
+
+def test_table_context_blocks_bare_canonical_heading() -> None:
+    mod = _splitter_module()
+    md = "Table 2: Ablation results on the dev set\n\nResults\n\nActual paragraph text.\n"
+
+    # "Results" 出现在表格标注附近, 大概率是表头单元格而非章节标题
+    assert [s.name for s in mod.split_sections(md)] == ["Body"]
+
+
+def test_titlecase_non_canonical_line_is_not_a_heading() -> None:
+    mod = _splitter_module()
+    # 首字母大写但不在规范白名单里的孤立行不是标题(描述性规则在切片 3)
+    md = "Our Proposed System\n\nWe describe the system here.\n"
+
+    assert [s.name for s in mod.split_sections(md)] == ["Body"]
+
+
+def test_markdown_and_plain_headers_merge_in_document_order() -> None:
+    mod = _splitter_module()
+    md = (
+        "# Introduction\n"
+        "\n"
+        "Intro body.\n"
+        "\n"
+        "3. Experiments\n"
+        "\n"
+        "Experiment body.\n"
+        "\n"
+        "# Conclusion\n"
+        "\n"
+        "Concluding body.\n"
+    )
+
+    sections = mod.split_sections(md)
+
+    # 两个来源的标题合并后仍按文档顺序排列
+    assert [s.name for s in sections] == ["Introduction", "Experiments", "Conclusion"]
+    assert [s.level for s in sections] == [1, 1, 1]
+    assert [s.idx for s in sections] == [0, 1, 2]
+    assert [s.body for s in sections] == ["Intro body.", "Experiment body.", "Concluding body."]

@@ -2,16 +2,16 @@
 
 ## 当前定位
 
-- 上下文恢复点：2026-07-31（双语 OCR 实施计划已提交，Task 8 已提交，Task 9
-  语言决策 RED 测试已创建，真实模型尚未下载）
+- 上下文恢复点：2026-07-31（双语 OCR Task 10 已提交；当前工作区目标验收通过，
+  但干净提交快照发现一项测试可复现性问题；真实模型尚未下载）
 - 当前阶段：P4（采集、解析和切块）
 - 当前课次：P4.9（MinerU 本地 GPU OCR 解析器与中英文语言路由）
-- 上一个确认完成文件：`src/paper_rag/ingest/semantic_scholar_source.py`
-- 当前待处理事项：执行实施计划 Task 9。助手已创建
-  `tests/test_parse_language.py`；下一步由用户运行
-  `uv run pytest -vv -s tests/test_parse_language.py` 观察
-  `ModuleNotFoundError: paper_rag.parse.language` RED，然后由用户实现
-  `src/paper_rag/parse/language.py`，再运行 GREEN 与 Ruff。
+- 上一个确认完成文件：`src/paper_rag/parse/mineru_local.py`
+- 当前待处理事项：先修复 Task 10 提交的测试可复现性。唯一下一步是由助手修改
+  `tests/test_mineru_local.py::test_diagnose_aggregates_current_runtime_without_hiding_failures`，
+  使用 `tmp_path` 创建临时 `config/magic-pdf.json` 并 monkeypatch `cfg.PROJECT_ROOT`，消除
+  对未跟踪 `config/magic-pdf.json` 的依赖；用户随后运行 Task 10 两组测试与目标 Ruff。
+  修复提交通过干净快照复核后，才能进入 Task 11。
 - Semantic Scholar 恢复点：取得 API key 后运行
   `scripts/demo_semantic_scholar_source.py`，再创建并运行无 mock 真实集成测试
 - 源文件基准：`/home/user_kyh/paper-rag-agent-main`
@@ -209,8 +209,8 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `src/paper_rag/parse/mineru_local.py` 已完成四个内部切片：运行时缓存环境、CLI 定位、
   错误分类与诊断数据结构；MinerU 原始 Markdown/图片/layout 发现和标准化；真实
   `subprocess.run()` 解析调度、超时、非零退出和空产物拒绝；以及 Doctor 的依赖、模型
-  目录、布局权重、按语言的 OCR 权重、CLI 版本和报告汇总。`tests/test_mineru_local.py`
-  已通过（23 passed, 13 warnings）；警告来自第三方 `rapid_table` 的 SyntaxWarning。
+  目录、布局权重、按语言的 OCR 权重、CLI 版本和报告汇总。Task 10 目标回归中
+  `tests/test_mineru_local.py` 已通过（25 passed）。
 - `scripts/demo_mineru_local.py` 已创建，支持交互输入本地 PDF、默认强制 OCR、隔离或
   持久化输出，并检查标准化 Markdown、figures、layout 与原始产物；Ruff 和 `--help`
   启动检查通过，但尚未运行真实解析。
@@ -255,17 +255,24 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
   OpenAlex 采集器映射可信 `zh/en` 语言并保留人工标注。
 - Task 8 已提交为 `7a88b37 refactor(ingest): 统一 Semantic Scholar 元数据持久化`：
   Semantic Scholar 采集器改用统一元数据持久化函数；真实 API 验收仍等待 API key。
-- Task 9 的 RED 测试文件 `tests/test_parse_language.py` 已由助手创建但尚未提交。该测试
-  覆盖元数据优先、英文文本、中文文本、空白扫描 fallback、损坏元数据、损坏 PDF、
-  强制 `ch/en` 和未知配置值拒绝。
+- Task 9 已提交为 `5abecae feat(parse): 实现中英文 OCR 语言自动判断`：
+  `resolve_ocr_language()` 支持强制 `ch/en`、人工元数据优先、PyMuPDF 文本采样和失败
+  回退到 `ch`，对应测试覆盖中英文、扫描件、损坏元数据与损坏 PDF。
+- Task 10 已提交为 `8ce42b1 feat(parse): 诊断 Mineru 中英文OCR权重`：Doctor 的
+  `auto` 模式展开检查 `ch/en` 四个 OCR 权重，新增 OCR 权重路径/可用性函数和
+  LayoutReader 两个文件检查，并接入 `diagnose()`。本轮复核
+  `tests/test_mineru_local.py` 为 25 passed，`tests/test_mineru_doctor_script.py` 为
+  7 passed，Task 10 目标 Ruff 与 `git diff --check` 均通过；但只包含提交 `8ce42b1` 的
+  `/tmp` 干净快照中 `tests/test_mineru_local.py` 为 24 passed、1 failed，聚合测试因
+  `config/magic-pdf.json` 未被提交而缺少 `models-dir` 检查。生产实现未发现对应行为错误，
+  测试必须改为自建临时配置后再确认 Task 10 checkpoint。
 
 ## 待处理问题
 
-- 当前首先处理 Task 9：运行 `uv run pytest -vv -s tests/test_parse_language.py` 观察 RED；
-  由用户实现 `src/paper_rag/parse/language.py` 后运行
-  `uv run pytest -vv -s tests/test_parse_language.py` 和
-  `uv run ruff check src/paper_rag/parse/language.py tests/test_parse_language.py`；通过后提交
-  `feat(parse): 实现中英文 OCR 语言自动判断`。
+- 当前首先修复 Task 10 聚合测试的环境依赖：由助手让该测试通过临时配置独立构造
+  `models-dir`、`layoutreader-model-dir` 和布局配置，再由用户运行目标测试与 Ruff；需再次
+  用只包含 Git 提交内容的干净快照验证。修复 checkpoint 后再执行 Task 11：CLI 不得接收
+  `auto`，英文权重缺失且中文权重可用时降级到 `ch`，并写出 `language.json`。
 - `src/paper_rag/ingest/arxiv_source.py` 仍有未提交的 Task 6 元数据持久化迁移 diff；
   此文件不要被 Task 9 提交顺带纳入。先前真实 arXiv 验收卡顿应作为独立网络超时修复
   处理，不要混入语言决策模块提交。
@@ -292,9 +299,14 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `AGENTS.md` 为用户未跟踪文件，助手不得擅自纳入课程提交。
 - `demo-local-data/`、`demo-url-data/`、`demo-arxiv-data/` 和
   `demo-openalex-data/`、`demo-pymupdf-data/` 是用户选择保留的真实结果，不得纳入 Git。
-- 当前解析实现、测试、Demo、GPU/OCR 配置和用户运行数据均尚未形成业务 Git
-  checkpoint；课程状态提交不得顺带纳入这些文件。`tests/test_parse_language.py` 是 Task 9
-  新 RED 测试，后续应只和 `src/paper_rag/parse/language.py` 一起提交。
+- Task 10 目标范围已经通过，但仓库全量 `uv run pytest -q` 当前为 126 passed、6 failed：
+  5 项是 `scripts.init_store` 导入失败，1 项是未跟踪的解析包测试受全量执行顺序影响。
+  全量 `uv run ruff check src tests scripts` 另有 4 项既有问题，位于
+  `scripts/demo_qdrant_store.py`、`src/paper_rag/ingest/arxiv_source.py` 和
+  `src/paper_rag/store/qdrant_store.py`。这些均不在 Task 10 提交范围，不能把仓库状态记录为
+  全量通过，也不要混入 Task 11 提交。
+- `scripts/demo_mineru_local.py`、`scripts/mineru_doctor.py`、解析包其他未跟踪文件、
+  GPU/OCR 配置和用户运行数据仍未形成业务 Git checkpoint；课程状态提交不得顺带纳入。
 
 ## Git 状态说明
 
@@ -324,6 +336,8 @@ P4 必须按完整数据流推进，不得因为解析器可以直接读取现�
 - `e193b7f refactor(ingest): 统一 URL 论文元数据持久化`
 - `d8b2673 refactor(ingest): 保留 OpenAlex 论文语言元数据`
 - `7a88b37 refactor(ingest): 统一 Semantic Scholar 元数据持久化`
+- `5abecae feat(parse): 实现中英文 OCR 语言自动判断`
+- `8ce42b1 feat(parse): 诊断 Mineru 中英文OCR权重`
 - 课程状态提交不得包含业务文件。
 
 ## 每次课结束必须更新

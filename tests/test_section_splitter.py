@@ -2,8 +2,10 @@
 
 切片 1: markdown 标题主路径(`#{1,4} Title`) + 无标题兜底。
 切片 2: 英文纯文本标题(PyMuPDF 降级产物)四形态与守卫。
+切片 3: 标题清洗、描述性合法性、层级边界与 first-abstract 守卫。
 输入是解析层产出的 `parsed/<paper_id>/paper.md` 全文; 输出是按文档顺序排列的
-`RawSection` 列表。标题清洗与描述性合法性留给切片 3, 中文纯文本规则留给切片 5。
+`RawSection` 列表。markdown 优先级去重与 References 尾部过滤留给切片 4,
+中文纯文本规则留给切片 5。
 
 接口约定(切块层已确认方案, 2026-08-01):
 
@@ -296,3 +298,124 @@ def test_markdown_and_plain_headers_merge_in_document_order() -> None:
     assert [s.level for s in sections] == [1, 1, 1]
     assert [s.idx for s in sections] == [0, 1, 2]
     assert [s.body for s in sections] == ["Intro body.", "Experiment body.", "Concluding body."]
+
+
+# ---------------------------------------------------------------------------
+# 切片 3: 标题清洗、描述性合法性、层级边界与 first-abstract 守卫
+#
+# 清洗: 去掉编号前缀、压缩内部连续空白、剥掉尾部的 : . - 破折号等标点;
+# markdown 标题名同样清洗, 但层级仍由 # 号数量决定。
+# 描述性合法性(仅编号形态启用): 词数 2-12、长度 3-120、无括号、不以 - 结尾,
+# 且满足"首字母大写 + 含描述性关键词"或"字母大写比例 >= 0.85"之一;
+# 图表/算法前缀一票否决。
+# first-abstract 守卫(仅孤立编号形态): 首个 Abstract 之前的描述性标题视为
+# 封面/作者区噪声; 白名单标题豁免(切片 2 的孤立编号用例即豁免路径的回归)。
+# 层级边界: 罗马数字固定一级, 深层编号封顶 4 级。
+# ---------------------------------------------------------------------------
+
+
+def test_markdown_heading_number_prefix_and_trailing_punct_are_cleaned() -> None:
+    mod = _splitter_module()
+    md = "# 1. Introduction:\n\nIntro body.\n\n## 2.1 Evaluation Setup —\n\nSetup body.\n"
+
+    sections = mod.split_sections(md)
+
+    # 名称清洗掉编号前缀与尾部标点; 层级仍来自 # 号数量而不是编号
+    assert [s.name for s in sections] == ["Introduction", "Evaluation Setup"]
+    assert [s.level for s in sections] == [1, 2]
+
+
+def test_heading_internal_whitespace_is_collapsed() -> None:
+    mod = _splitter_module()
+    md = "# Related   Work\n\nBody text.\n"
+
+    sections = mod.split_sections(md)
+
+    assert [s.name for s in sections] == ["Related Work"]
+
+
+def test_bare_canonical_with_trailing_period_is_cleaned() -> None:
+    mod = _splitter_module()
+    md = "Preamble text.\n\nConclusion.\n\nFinal body.\n"
+
+    sections = mod.split_sections(md)
+
+    # 裸规范标题先清洗再查白名单: "Conclusion." 也能命中
+    assert [s.name for s in sections] == ["Conclusion"]
+    assert sections[0].body == "Final body."
+
+
+def test_numbered_descriptive_title_with_keyword_is_heading() -> None:
+    mod = _splitter_module()
+    md = "Preamble text.\n\n3. Retrieval Augmented Generation\n\nWe describe the pipeline.\n"
+
+    sections = mod.split_sections(md)
+
+    # 非白名单标题走描述性规则: 首字母大写 + 含描述性关键词(retrieval/generation)
+    assert [s.name for s in sections] == ["Retrieval Augmented Generation"]
+    assert [s.level for s in sections] == [1]
+    assert sections[0].body == "We describe the pipeline."
+
+
+def test_numbered_all_caps_title_is_heading() -> None:
+    mod = _splitter_module()
+    md = "Preamble text.\n\n4. DESIGN AND SCOPE\n\nCaps body.\n"
+
+    sections = mod.split_sections(md)
+
+    # 描述性规则的另一分支: 字母大写比例 >= 0.85, 不要求命中关键词
+    assert [s.name for s in sections] == ["DESIGN AND SCOPE"]
+
+
+def test_numbered_titlecase_without_keyword_is_rejected() -> None:
+    mod = _splitter_module()
+    # 首字母大写但既不在白名单、也不含描述性关键词、大写比例不足
+    md = "Preamble text.\n\n3. Something Wonderful Here\n\nPlain body.\n"
+
+    assert [s.name for s in mod.split_sections(md)] == ["Body"]
+
+
+def test_numbered_title_with_brackets_or_figure_prefix_is_rejected() -> None:
+    mod = _splitter_module()
+    # 括号是描述性标题的黑名单字符
+    md1 = "Preamble text.\n\n3. Results (preliminary)\n\nBody text.\n"
+    assert [s.name for s in mod.split_sections(md1)] == ["Body"]
+
+    # 图表/算法前缀黑名单在白名单和描述性规则之前生效
+    md2 = "Preamble text.\n\n3. Figure 2 shows the pipeline\n\nBody text.\n"
+    assert [s.name for s in mod.split_sections(md2)] == ["Body"]
+
+
+def test_descriptive_standalone_number_blocked_before_first_abstract() -> None:
+    mod = _splitter_module()
+    # 首个 Abstract 之前: 孤立编号 + 描述性标题是封面/作者区噪声
+    before = "1.\nRetrieval Augmented Generation\n\nFront matter noise.\n"
+    assert [s.name for s in mod.split_sections(before)] == ["Body"]
+
+    # Abstract 出现之后, 同样的形态是真正的章节标题
+    after = "Abstract\nWe study retrieval.\n\n1.\nRetrieval Augmented Generation\n\nSection body.\n"
+    sections = mod.split_sections(after)
+    assert [s.name for s in sections] == ["Abstract", "Retrieval Augmented Generation"]
+    assert sections[1].body == "Section body."
+
+
+def test_deep_numbering_level_is_capped_at_four() -> None:
+    mod = _splitter_module()
+    md = "Preamble text.\n\n2.1.3.4.5 Evaluation Setup\n\nDeep body.\n"
+
+    sections = mod.split_sections(md)
+
+    assert [s.name for s in sections] == ["Evaluation Setup"]
+    # 编号有 5 段, 层级封顶为 4
+    assert [s.level for s in sections] == [4]
+
+
+def test_roman_numeral_gives_level_one_for_descriptive_title() -> None:
+    mod = _splitter_module()
+    md = "Preamble text.\n\nIV. Evaluation Setup Details\n\nRoman body.\n"
+
+    sections = mod.split_sections(md)
+
+    assert [s.name for s in sections] == ["Evaluation Setup Details"]
+    # 罗马数字编号不数点, 固定一级
+    assert [s.level for s in sections] == [1]

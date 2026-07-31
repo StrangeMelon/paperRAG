@@ -4,15 +4,17 @@
 切片 2: 英文纯文本标题(PyMuPDF 降级产物)四形态与守卫。
 切片 3: 标题清洗、描述性合法性、层级边界与 first-abstract 守卫。
 切片 4: markdown 优先级去重、References 尾部过滤与英文集成用例。
+切片 5: 中文纯文本标题扩展与 zh/en/None 语言路由。
+切片 5b: 中文阿拉伯点分编号(1. / 1.1 / 2.3.1)与量词/列表句守卫。
 输入是解析层产出的 `parsed/<paper_id>/paper.md` 全文; 输出是按文档顺序排列的
-`RawSection` 列表。中文纯文本规则留给切片 5。
+`RawSection` 列表。
 
 接口约定(切块层已确认方案, 2026-08-01):
 
     split_sections(md: str, *, language: str | None = None) -> list[RawSection]
 
 `language` 是仅限关键字的领域语言提示(`zh | en | None`), markdown 标题路径
-语言中立, 本切片仅验证参数存在且不改变 markdown 路径行为。
+语言中立; 纯文本标题的语言路由规则见切片 5 区块。
 """
 
 from __future__ import annotations
@@ -614,3 +616,319 @@ def test_english_plain_text_integration() -> None:
     assert sections[6].body == "Additional prompt details."
     for s in sections:
         assert md[s.start : s.end].strip() == s.body
+
+
+# ---------------------------------------------------------------------------
+# 切片 5: 中文纯文本标题扩展与 zh/en/None 语言路由
+#
+# 中文规范白名单(摘要/引言/相关工作/结论/参考文献/附录…), 白名单比较前压掉
+# 内部空格("摘 要" 这类 OCR 排版空格)。中文编号四形态: 一、 / (一) / 第X章
+# / 1、, 层级 (一) 为 2 其余为 1。行内 "摘要" 冒号切分同英文 Abstract。
+# 合法性按 2-30 字符数(中文不按空格分词), 必须含中文字符; 图/表/算法+编号
+# 前缀一票否决(必须带编号, 不误伤 "表示学习" 这类正常词)。
+# 参考文献→附录 尾部过滤与英文共用一个过滤器; 附录标题要求 "附录+短编号",
+# 叙述句 "附录中给出…" 不算(比英文 Appendix 前缀规则更紧, 中文没有空格分隔,
+# 误报面更大, 故从一开始就收紧)。
+# 路由: language="en" 只启用英文纯文本规则, "zh" 只启用中文, None 双语全开;
+# markdown 标题路径始终语言中立。
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("sep", ["：", ":"])  # noqa: RUF001  全角/半角冒号
+def test_zh_inline_abstract_splits_section(sep: str) -> None:
+    mod = _splitter_module()
+    md = f"中文论文标题\n作者甲 作者乙\n\n摘要{sep}本文提出一种检索增强方法。\n\n更多摘要内容。\n"
+
+    sections = mod.split_sections(md, language="zh")
+
+    assert [s.name for s in sections] == ["摘要"]
+    assert sections[0].level == 1
+    # 标题只吞掉 "摘要" 与分隔符, 同一行剩余文字属于正文
+    assert sections[0].body == "本文提出一种检索增强方法。\n\n更多摘要内容。"
+
+
+def test_zh_spaced_heading_is_normalized() -> None:
+    mod = _splitter_module()
+    # OCR 常把标题字符用空格隔开排版: "摘 要" / "结 论"
+    md = "摘 要：本文研究中文问答。\n\n正文内容。\n\n结 论\n\n方法有效。\n"  # noqa: RUF001
+
+    sections = mod.split_sections(md, language="zh")
+
+    # 名称压掉内部空格后再查白名单, 存储的也是规范形式
+    assert [s.name for s in sections] == ["摘要", "结论"]
+
+
+def test_zh_numbered_heading_four_forms() -> None:
+    mod = _splitter_module()
+    md = (
+        "摘要：本文研究检索增强生成。\n"  # noqa: RUF001
+        "\n"
+        "一、引言\n"
+        "\n"
+        "引言正文。\n"
+        "\n"
+        "第三章 实验分析\n"
+        "\n"
+        "实验正文。\n"
+        "\n"
+        "（一）数据集构建\n"  # noqa: RUF001
+        "\n"
+        "数据集正文。\n"
+        "\n"
+        "1、结果讨论\n"
+        "\n"
+        "讨论正文。\n"
+    )
+
+    sections = mod.split_sections(md, language="zh")
+
+    assert [s.name for s in sections] == ["摘要", "引言", "实验分析", "数据集构建", "结果讨论"]
+    # (一) 是子级编号取 2 级, 其余形态 1 级
+    assert [s.level for s in sections] == [1, 1, 1, 2, 1]
+    assert sections[3].body == "数据集正文。"
+
+
+def test_zh_numbered_title_char_count_bounds() -> None:
+    mod = _splitter_module()
+    # 标题字符数下限 2: 单字标题不合法
+    too_short = "前置说明。\n\n一、法\n\n正文内容。\n"
+    assert [s.name for s in mod.split_sections(too_short, language="zh")] == ["Body"]
+
+    # 上限 30: 整句式的长"标题"不合法
+    long_title = (
+        "一、" + "基于大规模预训练语言模型的检索增强生成方法在开放域问答任务上的实验研究" + "\n"
+    )
+    too_long = f"前置说明。\n\n{long_title}\n正文内容。\n"
+    assert [s.name for s in mod.split_sections(too_long, language="zh")] == ["Body"]
+
+
+def test_zh_figure_table_prefix_rejected_but_normal_word_kept() -> None:
+    mod = _splitter_module()
+    # 图/表/算法 + 编号开头是图表标注, 一票否决
+    md1 = "前置说明。\n\n二、表 2 主要实验结果\n\n正文内容。\n"
+    assert [s.name for s in mod.split_sections(md1, language="zh")] == ["Body"]
+
+    # 黑名单要求编号跟随: "表示学习方法" 以 "表" 开头但不是图表标注
+    md2 = "前置说明。\n\n二、表示学习方法\n\n正文内容。\n"
+    sections = mod.split_sections(md2, language="zh")
+    assert [s.name for s in sections] == ["表示学习方法"]
+
+
+def test_zh_table_context_blocks_bare_canonical() -> None:
+    mod = _splitter_module()
+    # "结果" 出现在表格标注附近, 大概率是表头单元格而非章节标题
+    md = "表 1 各方法在数据集上的对比\n\n结果\n\n真正的正文段落。\n"
+
+    assert [s.name for s in mod.split_sections(md, language="zh")] == ["Body"]
+
+
+def test_zh_reference_tail_filter_and_appendix() -> None:
+    mod = _splitter_module()
+    md = (
+        "摘要：本文研究检索增强生成。\n"  # noqa: RUF001
+        "\n"
+        "一、结论\n"
+        "\n"
+        "结论正文。\n"
+        "\n"
+        "参考文献\n"
+        "\n"
+        "1、检索增强生成研究综述\n"
+        "\n"
+        "附录A\n"
+        "\n"
+        "补充实验细节。\n"
+    )
+
+    sections = mod.split_sections(md, language="zh")
+
+    # 参考文献之后的条目噪声被过滤, 附录A 放行并解除过滤
+    assert [s.name for s in sections] == ["摘要", "结论", "参考文献", "附录A"]
+    assert "检索增强生成研究综述" in sections[2].body
+    assert sections[3].body == "补充实验细节。"
+
+
+def test_zh_appendix_narrative_sentence_is_not_heading() -> None:
+    mod = _splitter_module()
+    # 中文附录规则要求 "附录 + 短编号", 段首叙述句不会像英文 Appendix 那样误报
+    md = "前置说明。\n\n附录中给出了全部定理的证明。\n\n后续内容。\n"
+
+    assert [s.name for s in mod.split_sections(md, language="zh")] == ["Body"]
+
+
+def test_language_routing_selects_rule_sets() -> None:
+    mod = _splitter_module()
+    md = (
+        "Abstract— We study bilingual retrieval.\n"
+        "\n"
+        "一、引言\n"
+        "\n"
+        "中文正文。\n"
+        "\n"
+        "2. Related Work\n"
+        "\n"
+        "English body.\n"
+    )
+
+    # None: 双语规则全开, 中英标题都识别
+    both = [s.name for s in mod.split_sections(md)]
+    assert both == ["Abstract", "引言", "Related Work"]
+
+    # en: 中文纯文本规则关闭
+    en_only = [s.name for s in mod.split_sections(md, language="en")]
+    assert en_only == ["Abstract", "Related Work"]
+
+    # zh: 英文纯文本规则关闭
+    zh_only = [s.name for s in mod.split_sections(md, language="zh")]
+    assert zh_only == ["引言"]
+
+
+def test_zh_markdown_heading_number_prefix_is_cleaned() -> None:
+    mod = _splitter_module()
+    # markdown 路径语言中立, 但清洗要认识中文编号前缀
+    md = "# 一、引言\n\n引言正文。\n\n## （一）数据集\n\n数据集正文。\n"  # noqa: RUF001
+
+    sections = mod.split_sections(md)
+
+    assert [s.name for s in sections] == ["引言", "数据集"]
+    # 层级仍由 # 号数量决定
+    assert [s.level for s in sections] == [1, 2]
+
+
+def test_zh_integration_mini_paper() -> None:
+    mod = _splitter_module()
+    md = (
+        "基于检索增强生成的中文问答系统研究\n"
+        "\n"
+        "张三 李四\n"
+        "\n"
+        "摘 要：本文提出一种检索增强的问答方法。\n"  # noqa: RUF001
+        "\n"
+        "一、引言\n"
+        "\n"
+        "大模型在开放域问答中容易产生幻觉。\n"
+        "\n"
+        "二、相关工作\n"
+        "\n"
+        "（一）检索增强生成\n"  # noqa: RUF001
+        "\n"
+        "已有工作在生成前只检索一次。\n"
+        "\n"
+        "表 1 各方法在数据集上的对比\n"
+        "\n"
+        "结果\n"
+        "\n"
+        "三、结论\n"
+        "\n"
+        "实验验证了方法的有效性。\n"
+        "\n"
+        "参考文献\n"
+        "\n"
+        "1、检索增强生成研究综述\n"
+        "\n"
+        "附录A\n"
+        "\n"
+        "补充实验细节。\n"
+    )
+
+    for language in ("zh", None):
+        sections = mod.split_sections(md, language=language)
+
+        # 中文纯文本链路集成: 行内摘要 / 三种编号 / 表格守卫 / 尾部过滤 / 附录放行
+        assert [s.name for s in sections] == [
+            "摘要",
+            "引言",
+            "相关工作",
+            "检索增强生成",
+            "结论",
+            "参考文献",
+            "附录A",
+        ]
+        assert [s.level for s in sections] == [1, 1, 1, 2, 1, 1, 1]
+        assert [s.idx for s in sections] == list(range(7))
+        # 标题行与作者行不属于任何章节
+        assert all("张三" not in s.body for s in sections)
+        # 行内摘要的同一行剩余文字进入正文
+        assert sections[0].body == "本文提出一种检索增强的问答方法。"
+        # 表格标注与被守卫拦下的 "结果" 留在上一节正文里
+        assert "表 1 各方法在数据集上的对比" in sections[3].body
+        assert "结果" in sections[3].body
+        # 参考文献条目与附录正文各归其位
+        assert "检索增强生成研究综述" in sections[5].body
+        assert sections[6].body == "补充实验细节。"
+        for s in sections:
+            assert md[s.start : s.end].strip() == s.body
+
+
+# ---------------------------------------------------------------------------
+# 切片 5b: 中文阿拉伯点分编号(1. / 1.1 / 2.3.1)
+#
+# 中文理工科学报的主流编号是阿拉伯点分("1.1 实验设置", GB/T 7713 风格),
+# 切片 5 的四形态未覆盖: en 规则能匹配编号但中文标题过不了英文合法性,
+# zh 规则不认该形态, 结果整行落入上一节正文。本切片补第五形态:
+# 层级由点分段数决定(1. 一级, 1.1 二级, 2.3.1 三级), 编号后空格可省略
+# ("1.1实验设置" 也常见)。两类该形态特有的误报面加守卫: 小数量词
+# ("3.5 倍的提升")用单位字符黑名单(倍/%/‰)拦截; 编号列表句用句读
+# (逗号/分号/句中句号)一票否决。问号/叹号不否决, 设问式标题是合法标题。
+# ---------------------------------------------------------------------------
+
+
+def test_zh_arabic_dotted_heading_three_depths() -> None:
+    mod = _splitter_module()
+    md = (
+        "摘要：本文研究检索增强生成。\n"  # noqa: RUF001
+        "\n"
+        "1. 引言\n"
+        "\n"
+        "引言正文。\n"
+        "\n"
+        "1.1 研究背景与动机\n"
+        "\n"
+        "背景正文。\n"
+        "\n"
+        "2.3.1 数据集构建\n"
+        "\n"
+        "数据集正文。\n"
+    )
+
+    for language in ("zh", None):
+        sections = mod.split_sections(md, language=language)
+        assert [s.name for s in sections] == ["摘要", "引言", "研究背景与动机", "数据集构建"]
+        # 点分形态的层级由段数决定, 与英文编号同一套 _level_from_number
+        assert [s.level for s in sections] == [1, 1, 2, 3]
+        assert sections[2].body == "背景正文。"
+
+
+def test_zh_arabic_dotted_no_space_and_markdown_cleaning() -> None:
+    mod = _splitter_module()
+    # 中文排版常省略编号后的空格
+    md1 = "前置说明。\n\n1.1实验设置\n\n正文内容。\n"
+    sections = mod.split_sections(md1, language="zh")
+    assert [s.name for s in sections] == ["实验设置"]
+    assert sections[0].level == 2
+
+    # markdown 路径语言中立, 清洗同样要剥掉无空格的点分编号前缀
+    md2 = "# 1.1实验设置\n\n正文内容。\n"
+    sections = mod.split_sections(md2)
+    assert [s.name for s in sections] == ["实验设置"]
+    # markdown 标题层级仍由 # 号数量决定
+    assert sections[0].level == 1
+
+
+def test_zh_decimal_quantity_and_list_item_not_heading() -> None:
+    mod = _splitter_module()
+    # 小数量词: 段首 "3.5 倍…" 与章节号在语法上无法区分, 用单位字符黑名单拦截
+    md1 = "前置说明。\n\n3.5 倍的性能提升来自检索模块\n\n后续内容。\n"
+    assert [s.name for s in mod.split_sections(md1, language="zh")] == ["Body"]
+
+    # 编号列表句: 真标题不含句读, 含逗号/分号的行一票否决
+    md2 = "前置说明。\n\n2. 其次，构造负样本用于训练；\n\n后续内容。\n"  # noqa: RUF001
+    assert [s.name for s in mod.split_sections(md2, language="zh")] == ["Body"]
+
+
+def test_zh_arabic_dotted_english_line_not_captured_by_zh_rule() -> None:
+    mod = _splitter_module()
+    # 点分编号 + 英文标题仍归英文规则: zh 路由下不识别, None 下由 en 规则命中
+    md = "前置说明。\n\n2.1 Experimental Setup\n\nBody text.\n"
+    assert [s.name for s in mod.split_sections(md, language="zh")] == ["Body"]
+    assert [s.name for s in mod.split_sections(md)] == ["Experimental Setup"]

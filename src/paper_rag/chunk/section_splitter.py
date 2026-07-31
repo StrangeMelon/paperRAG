@@ -3,7 +3,9 @@
 切片 1 实现 markdown 标题路径(`#{1,4} Title`)与无标题时的 Body 兜底。
 切片 2 实现英文纯文本标题(PyMuPDF 降级产物)的四种形态与两个守卫。
 切片 3 实现标题清洗、描述性合法性判定、first-abstract 守卫与层级封顶。
-切片 4 实现 markdown 优先级去重与 References 尾部过滤。中文纯文本规则在切片 5。
+切片 4 实现 markdown 优先级去重与 References 尾部过滤。
+切片 5 实现中文纯文本标题(白名单/编号/行内摘要)与 zh/en/None 语言路由。
+切片 5b 补充中文阿拉伯点分编号(1. / 1.1 / 2.3.1)与量词/列表句守卫。
 """
 
 from __future__ import annotations
@@ -23,11 +25,15 @@ _INLINE_NUM_TITLE_RE = re.compile(r"^((?:\d+(?:\.\d+)*|[IVX]+)\.?)\s+(.+?)\s*$")
 # 标题名开头的编号前缀, 清洗时剥掉(层级计算不依赖这里, 见 _level_from_number)
 _NUMBER_PREFIX_RE = re.compile(r"^(?:\d+(?:\.\d+)*|[IVX]+)\.?\s+")
 _PAGE_MARKER_RE = re.compile(r"<!--\s*page\s+\d+\s*-->", re.IGNORECASE)
-# 表格/图片标注行: 其后的孤立短语大概率是表头单元格而不是章节标题
-_TABLE_CONTEXT_RE = re.compile(r"^(?:table|fig\.|figure)\b", re.IGNORECASE)
+# 表格/图片标注行: 其后的孤立短语大概率是表头单元格而不是章节标题;
+# 中文分支要求编号跟随, 避免 "表示学习" 这类正常词开头的行被误判为标注
+_TABLE_CONTEXT_RE = re.compile(
+    r"^(?:table|fig\.|figure)\b|^(?:图|表|算法)\s*[0-9一二三四五六七八九十]",
+    re.IGNORECASE,
+)
 
-# 清洗时从标题两端剥掉的空白与标点(含 em dash 与 en dash)
-_STRIP_PUNCT = " \t:.-—–"  # noqa: RUF001
+# 清洗时从标题两端剥掉的空白与标点(含 em/en dash 与全角冒号、句号)
+_STRIP_PUNCT = " \t:.-—–：。"  # noqa: RUF001
 
 # 图表/算法标注开头的标题一票否决, 在白名单与描述性规则之前生效
 _BAD_HEADING_PREFIXES = ("fig.", "figure ", "table ", "algorithm ")
@@ -100,6 +106,81 @@ _GUARD_BYPASS = {"abstract", "references", "bibliography"}
 # 规范标题的前缀匹配: "Appendix A" / "Appendix B: Proofs" 也算规范标题
 _CANONICAL_PREFIXES = ("appendix ",)
 
+# ---- 中文纯文本标题(切片 5) ----
+
+# 行内摘要: "摘要" 后跟全角或半角冒号, 标题只吞掉 "摘要" 与分隔符
+_ZH_ABSTRACT_INLINE_RE = re.compile(r"^摘\s*要\s*[:：]\s*")  # noqa: RUF001
+# 中文编号标题五形态: 一、 / (一) / 第X章 / 1、 / 阿拉伯点分(1. 1.1 2.3.1);
+# (一) 取 2 级, 点分层级按段数由 _level_from_number 计算, 其余 1 级。
+# 点分编号后的空格可省略("1.1实验设置" 也常见), 但纯数字必须带点,
+# 避免把 "2023 年…" 这类年份行当成编号
+_ZH_NUM_TITLE_RE = re.compile(
+    r"^(?:[一二三四五六七八九十]+、"
+    r"|（(?P<paren>[一二三四五六七八九十]+)）"  # noqa: RUF001
+    r"|第[一二三四五六七八九十百0-9]+章"
+    r"|[0-9]+、"
+    r"|(?P<arabic>[0-9]+(?:\.[0-9]+)+\.?|[0-9]+\.))"
+    r"\s*(?P<title>.+?)\s*$"
+)
+# 标题名开头的中文编号前缀, 清洗时剥掉("# 一、引言" 这类 markdown 中文标题);
+# 点分分支覆盖英文前缀正则不管的无空格形态("# 1.1实验设置")
+_ZH_NUMBER_PREFIX_RE = re.compile(
+    r"^(?:[一二三四五六七八九十]+、"
+    r"|（[一二三四五六七八九十]+）"  # noqa: RUF001
+    r"|第[一二三四五六七八九十百0-9]+章"
+    r"|[0-9]+、"
+    r"|[0-9]+(?:\.[0-9]+)+\.?"
+    r"|[0-9]+\.)\s*"
+)
+# 图/表/算法 + 编号开头是图表标注, 一票否决; 必须带编号, 不误伤 "表示学习"
+_ZH_BAD_PREFIX_RE = re.compile(r"^(?:图|表|算法)\s*[0-9一二三四五六七八九十]")
+# 点分编号与小数在语法上无法区分("3.5 倍的提升" vs "3.5 实验设置"),
+# 标题部分以计量单位字符开头的一票否决
+_ZH_UNIT_PREFIX_RE = re.compile(r"^[倍%‰]")
+# 真标题不含句读; 逗号/分号/句中句号说明是编号列表句或叙述句。
+# 问号/叹号不在其列: 设问式标题("为什么需要检索增强?")是合法标题
+_ZH_SENTENCE_PUNCT_RE = re.compile(r"[，。；,;]")  # noqa: RUF001
+# 附录标题: "附录" / "附录A" / "附录 一" 等短编号; 中文没有空格分隔,
+# 叙述句 "附录中给出…" 的误报面比英文更大, 故要求编号短促、整行匹配
+_ZH_APPENDIX_RE = re.compile(r"^附\s*录\s*[A-Za-z0-9一二三四五六七八九十]{0,3}$")
+
+# 中文规范章节标题白名单(白名单比较前先压掉内部空格, 兼容 "摘 要" 排版)
+_ZH_CANONICAL_HEADINGS = {
+    "摘要",
+    "引言",
+    "绪论",
+    "前言",
+    "背景",
+    "研究背景",
+    "相关工作",
+    "研究现状",
+    "方法",
+    "研究方法",
+    "模型",
+    "系统设计",
+    "实验",
+    "实验设置",
+    "实验结果",
+    "实验与分析",
+    "结果",
+    "结果与分析",
+    "讨论",
+    "分析",
+    "结论",
+    "总结",
+    "结论与展望",
+    "展望",
+    "致谢",
+    "参考文献",
+    "附录",
+}
+
+# 摘要与参考文献在中文扫描件里同样常紧贴上一段落, 跳过边界/表格守卫
+_ZH_GUARD_BYPASS = {"摘要", "参考文献"}
+
+# 尾部过滤的触发标题(中英共用一个过滤器)
+_REFERENCE_TAIL_TRIGGERS = {"references", "参考文献"}
+
 
 @dataclass
 class RawSection:
@@ -136,10 +217,10 @@ class _Line:
 def split_sections(md: str, *, language: str | None = None) -> list[RawSection]:
     """把 markdown 全文切分为章节列表。
 
-    language 是领域语言提示, 取值 zh | en | None, None 表示双语规则全开。
-    markdown 标题路径语言中立, 该参数要到切片 5 才参与纯文本标题的路由。
+    language 是领域语言提示: "en" 只启用英文纯文本规则, "zh" 只启用中文,
+    None 表示双语规则全开。markdown 标题路径始终语言中立。
     """
-    headers = _collect_headers(md)
+    headers = _collect_headers(md, language)
     if not headers:
         return [RawSection(idx=0, name="Body", level=1, start=0, end=len(md), body=md.strip())]
 
@@ -161,9 +242,9 @@ def split_sections(md: str, *, language: str | None = None) -> list[RawSection]:
 
 
 # 获取每个标题的名称、层级、在原文中的字符区间, 以及来源(供去重规则区分优先级)
-def _collect_headers(md: str) -> list[_Header]:
+def _collect_headers(md: str, language: str | None) -> list[_Header]:
     headers = _markdown_headers(md)
-    headers.extend(_plain_headers(md))
+    headers.extend(_plain_headers(md, language))
     headers.sort(key=lambda h: (h.start, h.end))
     return _filter_reference_tail(_dedupe_headers(headers))
 
@@ -177,13 +258,14 @@ def _markdown_headers(md: str) -> list[_Header]:
     return headers
 
 
-def _plain_headers(md: str) -> list[_Header]:
-    """逐行扫描英文纯文本标题; 每行按固定顺序尝试四种形态, 命中即停。
+def _plain_headers(md: str, language: str | None) -> list[_Header]:
+    """逐行扫描纯文本标题; 按语言路由选择形态列表, 每行按固定顺序尝试, 命中即停。
 
     孤立编号形态会吞掉下一行标题, 但扫描仍逐行前进, 标题行自身还会命中
     裸规范标题形态产生重叠, 由 _dedupe_headers 统一丢弃。
     """
     lines = _lines(md)
+    matchers = _matchers_for(language)
     headers: list[_Header] = []
     for i in range(len(lines)):
         stripped = lines[i].text.strip()
@@ -191,12 +273,7 @@ def _plain_headers(md: str) -> list[_Header]:
         # 否则清洗剥掉 # 后会命中裸规范标题, 产生与 markdown 标题竞争的重复项
         if not stripped or stripped.startswith("#"):
             continue
-        for matcher in (
-            _match_inline_abstract,
-            _match_standalone_number,
-            _match_inline_numbered,
-            _match_bare_canonical,
-        ):
+        for matcher in matchers:
             header = matcher(lines, i)
             if header is not None:
                 headers.append(header)
@@ -257,6 +334,70 @@ def _match_bare_canonical(lines: list[_Line], i: int) -> _Header | None:
     return _Header(line.start, line.end, name, 1, "plain")
 
 
+def _match_zh_inline_abstract(lines: list[_Line], i: int) -> _Header | None:
+    line = lines[i]
+    m = _ZH_ABSTRACT_INLINE_RE.match(line.text.strip())
+    if not m:
+        return None
+    # 标题区间只覆盖 "摘要" 与分隔符; 名称统一存规范形式(压掉 "摘 要" 的空格)
+    lead = len(line.text) - len(line.text.lstrip())
+    return _Header(line.start, line.start + lead + m.end(), "摘要", 1, "plain")
+
+
+def _match_zh_numbered(lines: list[_Line], i: int) -> _Header | None:
+    line = lines[i]
+    m = _ZH_NUM_TITLE_RE.match(line.text.strip())
+    if not m:
+        return None
+    title = _clean_heading(m.group("title"))
+    if not _valid_zh_heading_name(title):
+        return None
+    if not _paragraph_boundary_before(lines, i):
+        return None
+    if m.group("paren"):
+        level = 2
+    elif m.group("arabic"):
+        level = _level_from_number(m.group("arabic"))
+    else:
+        level = 1
+    return _Header(line.start, line.end, title, level, "plain")
+
+
+def _match_zh_bare_canonical(lines: list[_Line], i: int) -> _Header | None:
+    line = lines[i]
+    # 白名单比较与存储都用压掉内部空格的规范形式("摘 要" -> "摘要")
+    name = _clean_heading(line.text).replace(" ", "")
+    if not _is_zh_canonical(name):
+        return None
+    if name not in _ZH_GUARD_BYPASS and (
+        not _paragraph_boundary_before(lines, i) or _table_context_before(lines, i)
+    ):
+        return None
+    return _Header(line.start, line.end, name, 1, "plain")
+
+
+_EN_MATCHERS = (
+    _match_inline_abstract,
+    _match_standalone_number,
+    _match_inline_numbered,
+    _match_bare_canonical,
+)
+_ZH_MATCHERS = (
+    _match_zh_inline_abstract,
+    _match_zh_numbered,
+    _match_zh_bare_canonical,
+)
+
+
+def _matchers_for(language: str | None) -> tuple:
+    """语言路由: en/zh 只启用本语言的纯文本规则, 其他值(含 None)双语全开。"""
+    if language == "en":
+        return _EN_MATCHERS
+    if language == "zh":
+        return _ZH_MATCHERS
+    return _EN_MATCHERS + _ZH_MATCHERS
+
+
 def _lines(md: str) -> list[_Line]:
     lines: list[_Line] = []
     pos = 0
@@ -301,10 +442,11 @@ def _before_first_abstract(lines: list[_Line], i: int) -> bool:
 
 
 def _clean_heading(value: str) -> str:
-    """标题名清洗: 去 # 前缀与编号前缀, 压缩内部空白, 剥两端标点。"""
+    """标题名清洗: 去 # 前缀与中英编号前缀, 压缩内部空白, 剥两端标点。"""
     value = value.strip()
     value = re.sub(r"^#+\s*", "", value)
     value = _NUMBER_PREFIX_RE.sub("", value)
+    value = _ZH_NUMBER_PREFIX_RE.sub("", value)
     value = re.sub(r"\s+", " ", value)
     return value.strip(_STRIP_PUNCT)
 
@@ -346,6 +488,35 @@ def _is_canonical_heading(name: str) -> bool:
     return low in _CANONICAL_HEADINGS or low.startswith(_CANONICAL_PREFIXES)
 
 
+def _valid_zh_heading_name(name: str) -> bool:
+    """编号形态的中文标题合法性: 黑名单前缀 → 白名单 → 2-30 字符 + 含中文。
+
+    中文不按空格分词, 描述性判定用字符数而不是词数; 也没有大写比例可用,
+    以 "必须含中文字符" 排除纯数字/纯符号行。单位字符开头(小数量词)与
+    含句读(编号列表句/叙述句)的标题一票否决。
+    """
+    if not name:
+        return False
+    if _ZH_BAD_PREFIX_RE.match(name):
+        return False
+    if _ZH_UNIT_PREFIX_RE.match(name):
+        return False
+    if _is_zh_canonical(name):
+        return True
+    if not 2 <= len(name) <= 30:
+        return False
+    if re.search(r"[\[\]{}()（）]", name):  # noqa: RUF001
+        return False
+    if _ZH_SENTENCE_PUNCT_RE.search(name):
+        return False
+    return bool(re.search(r"[\u4e00-\u9fff]", name))
+
+
+def _is_zh_canonical(name: str) -> bool:
+    compact = name.replace(" ", "")
+    return compact in _ZH_CANONICAL_HEADINGS or bool(_ZH_APPENDIX_RE.match(compact))
+
+
 def _level_from_number(number: str) -> int:
     """只用编号 token 计算层级: "1." 一级, "2.1" 二级, 罗马数字一级, 封顶 4 级。
 
@@ -376,23 +547,27 @@ def _dedupe_headers(headers: list[_Header]) -> list[_Header]:
 
 
 def _filter_reference_tail(headers: list[_Header]) -> list[_Header]:
-    """References 之后的标题一律丢弃, 仅放行 Appendix* 并以之解除过滤。
+    """References / 参考文献 之后的标题一律丢弃, 仅放行附录标题并以之解除过滤。
 
-    参考文献条目 "编号 + 首字母大写标题" 与行内编号标题形态无法区分,
-    只能按位置过滤; 附录出现后恢复正常识别。
+    参考文献条目("编号 + 首字母大写标题" 或 "1、中文标题")与行内编号标题
+    形态无法区分, 只能按位置过滤; 附录出现后恢复正常识别。中英共用一个过滤器,
+    混排文档里任一语言的 References 标题都能触发。
     """
     kept: list[_Header] = []
     in_references = False
     for h in headers:
-        low = h.name.lower()
-        if in_references and not low.startswith("appendix"):
+        if in_references and not _is_appendix_heading(h.name):
             continue
         kept.append(h)
-        if low == "references":
+        if h.name.lower() in _REFERENCE_TAIL_TRIGGERS:
             in_references = True
-        elif low.startswith("appendix"):
+        elif _is_appendix_heading(h.name):
             in_references = False
     return kept
+
+
+def _is_appendix_heading(name: str) -> bool:
+    return name.lower().startswith("appendix") or bool(_ZH_APPENDIX_RE.match(name))
 
 
 # 验证 markdown 标题名称是否有效, 仅包含空格或标点符号的标题不算有效标题

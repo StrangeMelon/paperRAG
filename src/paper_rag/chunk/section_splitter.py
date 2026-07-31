@@ -123,14 +123,17 @@ _ZH_NUM_TITLE_RE = re.compile(
     r"\s*(?P<title>.+?)\s*$"
 )
 # 标题名开头的中文编号前缀, 清洗时剥掉("# 一、引言" 这类 markdown 中文标题);
-# 点分分支覆盖英文前缀正则不管的无空格形态("# 1.1实验设置")
+# 点分分支覆盖英文前缀正则不管的无空格形态("# 1.1实验设置");
+# 末分支剥中文期刊常见的 "纯数字直贴标题"("# 1综合能源服务系统物理架构"),
+# 限 1-2 位数字, 避免剥掉 "2023年…" 这类年份开头的真标题
 _ZH_NUMBER_PREFIX_RE = re.compile(
     r"^(?:[一二三四五六七八九十]+、"
     r"|（[一二三四五六七八九十]+）"  # noqa: RUF001
     r"|第[一二三四五六七八九十百0-9]+章"
     r"|[0-9]+、"
     r"|[0-9]+(?:\.[0-9]+)+\.?"
-    r"|[0-9]+\.)\s*"
+    r"|[0-9]+\."
+    r"|[0-9]{1,2}(?=[\u4e00-\u9fff]))\s*"
 )
 # 图/表/算法 + 编号开头是图表标注, 一票否决; 必须带编号, 不误伤 "表示学习"
 _ZH_BAD_PREFIX_RE = re.compile(r"^(?:图|表|算法)\s*[0-9一二三四五六七八九十]")
@@ -292,11 +295,13 @@ def _match_inline_abstract(lines: list[_Line], i: int) -> _Header | None:
 
 
 def _match_standalone_number(lines: list[_Line], i: int) -> _Header | None:
+    """英文编号形态不要求段落边界: 真实 PyMuPDF 产物整篇无空行, 标题紧贴上一段;
+    误报由描述性合法性(白名单/大写比例/关键词)兜住, 与基准一致。"""
     line = lines[i]
     stripped = line.text.strip()
     if not _STANDALONE_NUM_RE.match(stripped):
         return None
-    if i + 1 >= len(lines) or not _paragraph_boundary_before(lines, i):
+    if i + 1 >= len(lines):
         return None
     title = _clean_heading(lines[i + 1].text)
     if not _valid_heading_name(title, allow_descriptive=True):
@@ -316,8 +321,6 @@ def _match_inline_numbered(lines: list[_Line], i: int) -> _Header | None:
         return None
     title = _clean_heading(m.group(2))
     if not _valid_heading_name(title, allow_descriptive=True):
-        return None
-    if not _paragraph_boundary_before(lines, i):
         return None
     return _Header(line.start, line.end, title, _level_from_number(m.group(1)), "plain")
 
@@ -345,6 +348,8 @@ def _match_zh_inline_abstract(lines: list[_Line], i: int) -> _Header | None:
 
 
 def _match_zh_numbered(lines: list[_Line], i: int) -> _Header | None:
+    """中文编号形态保留段落边界守卫: 中文合法性没有大写比例可用, 判别力弱于
+    英文, 去守卫误报面过大; 中文主路径是 MinerU(markdown 标题), 不受影响。"""
     line = lines[i]
     m = _ZH_NUM_TITLE_RE.match(line.text.strip())
     if not m:

@@ -932,3 +932,64 @@ def test_zh_arabic_dotted_english_line_not_captured_by_zh_rule() -> None:
     md = "前置说明。\n\n2.1 Experimental Setup\n\nBody text.\n"
     assert [s.name for s in mod.split_sections(md, language="zh")] == ["Body"]
     assert [s.name for s in mod.split_sections(md)] == ["Experimental Setup"]
+
+
+def test_zh_markdown_digit_attached_prefix_is_cleaned() -> None:
+    mod = _splitter_module()
+    # 真实中文期刊 MinerU 产物: 纯数字编号与标题无分隔("# 1综合能源服务系统物理架构"),
+    # 英文前缀正则要求空格管不到; 限 1-2 位数字, 年份开头的标题("2023年…")不剥
+    md = "# 1综合能源服务系统物理架构\n\n正文一。\n\n# 2023年度电力行业回顾\n\n正文二。\n"
+    sections = mod.split_sections(md, language="zh")
+    assert [s.name for s in sections] == ["综合能源服务系统物理架构", "2023年度电力行业回顾"]
+
+
+# ---------------------------------------------------------------------------
+# 真实验收回归: PyMuPDF 密排版面(无空行)
+#
+# 真实 PyMuPDF 产物整篇没有空行, 标题行紧贴上一段末行。切片 2 给英文编号
+# 形态加的段落边界守卫比基准更严, 在真实文件上把 "1. Introduction" 等全部
+# 拦掉, 整篇只剩 Abstract/References。修正为与基准一致: 英文编号形态不要求
+# 段落边界, 由描述性合法性(白名单/大写比例/关键词)兜住误报。
+# 中文编号形态保留边界守卫: 中文合法性没有大写比例可用, 判别力更弱,
+# 去掉守卫误报面过大; 中文主路径是 MinerU(有 markdown 标题), 不受影响。
+# ---------------------------------------------------------------------------
+
+
+def test_dense_pymupdf_numbered_headings_without_blank_lines() -> None:
+    mod = _splitter_module()
+    # 版面取自真实 Graph-Mamba PyMuPDF 产物: 编号标题上一行是正文, 无空行
+    md = (
+        "Correspondence to: Bo Wang <bo@example.com>.\n"
+        "1. Introduction\n"
+        "Graph modeling has been widely used.\n"
+        "ing its efficiency in long-range graph datasets.\n"
+        "2. Related Work\n"
+        "2.1. Graph Transformers\n"
+        "Prior systems exist.\n"
+    )
+    sections = mod.split_sections(md, language="en")
+
+    # "2.1. Graph Transformers" 无白名单/关键词命中, 被合法性拒绝留在正文里
+    assert [s.name for s in sections] == ["Introduction", "Related Work"]
+    assert "2.1. Graph Transformers" in sections[1].body
+
+
+def test_dense_standalone_number_heading_without_blank_lines() -> None:
+    mod = _splitter_module()
+    # 孤立编号行同样可能紧贴上一段(换页/换栏处), 不要求段落边界。
+    # 层级必须来自编号行("2.1" 二级): 若守卫拦下编号形态, 标题行会经
+    # 裸规范标题侧门被识别成一级, 名字碰巧一样但层级错误
+    md = "The previous paragraph ends here.\n2.1\nExperimental Setup\nSetup body.\n"
+    sections = mod.split_sections(md, language="en")
+
+    assert [s.name for s in sections] == ["Experimental Setup"]
+    assert sections[0].level == 2
+    assert sections[0].body == "Setup body."
+
+
+def test_zh_numbered_heading_still_requires_boundary() -> None:
+    mod = _splitter_module()
+    # 中文编号形态保留边界守卫: 密排文本里断行产生的行首枚举不是标题
+    md = "实验对比了三种方法\n一、基于稀疏检索的方法与\n二、基于稠密检索的方法。\n"
+
+    assert [s.name for s in mod.split_sections(md, language="zh")] == ["Body"]

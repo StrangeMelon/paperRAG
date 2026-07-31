@@ -19,6 +19,7 @@ from .. import config as cfg
 from ..utils.logger import get_logger
 from ..utils.paths import parsed_dir
 from .language import OcrLanguageDecision, resolve_ocr_language
+from .page_markers import inject_page_markers
 
 log = get_logger(__name__)
 
@@ -794,11 +795,6 @@ def _normalize_into(
         markdown,
     )
 
-    (output_dir / "paper.md").write_text(
-        markdown,
-        encoding="utf-8",
-    )
-
     layout_candidates = [
         *source_markdown.parent.glob(
             "*content_list*.json"
@@ -808,6 +804,7 @@ def _normalize_into(
         ),
     ]
 
+    layout: object | None = None
     for candidate in layout_candidates:
         try:
             layout = json.loads(
@@ -815,7 +812,21 @@ def _normalize_into(
             )
         except (OSError, json.JSONDecodeError):
             continue
+        break
 
+    # content_list 形态(list)才能做页码对齐;
+    # middle.json 形态(dict)只存档不注标
+    markdown = inject_page_markers(
+        markdown,
+        layout,
+    )
+
+    (output_dir / "paper.md").write_text(
+        markdown,
+        encoding="utf-8",
+    )
+
+    if layout is not None:
         (output_dir / "layout.json").write_text(
             json.dumps(
                 layout,
@@ -824,7 +835,6 @@ def _normalize_into(
             ),
             encoding="utf-8",
         )
-        break
 
 
 def _select_available_ocr_language(

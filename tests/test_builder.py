@@ -7,6 +7,8 @@
         含基准会漂移的"节头多空行"场景)。
 切片 4: 参考文献打标(References/参考文献 节的块 metadata["is_references"]=True,
         普通块不带该键, 与基准 schema 逐键一致)。
+切片 5: 多模态块与 layout 增强(figure/table/formula 组装、raw_snippet 回切
+        不变量、asset_path 解析、图块自身页码、图注注入与表重定型、降级)。
 
 接口约定(与基准一致, 2026-08-01 确认):
 
@@ -14,8 +16,7 @@
         -> tuple[list[dict], list[dict]]
 
 `language` 不是参数: builder 从 parsed_dir/language.json 读 document_language
-(zh/en, 缺失或损坏 -> None), 是把语言贯通到全链的唯一枢纽。多模态块
-(figure/table/formula)在 multimodal_chunker 课接入, 本课只交文本主路径。
+(zh/en, 缺失或损坏 -> None), 是把语言贯通到全链的唯一枢纽。
 """
 
 from __future__ import annotations
@@ -210,3 +211,110 @@ def test_zh_references_section_chunks_are_flagged(tmp_path: Path) -> None:
     refs = [c for c in chunks if c["section"] == "参考文献"]
     assert refs
     assert all(c["metadata"]["is_references"] is True for c in refs)
+
+
+# ---------------------------------------------------------------------------
+# 切片 5: 多模态块与 layout 增强(2026-08-01 multimodal 课确认)
+# ---------------------------------------------------------------------------
+
+MM_MD = (
+    "# Results\n"
+    "\n"
+    "Intro sentence for results.\n"
+    "\n"
+    "![Arch overview](figures/h1.jpg)\n"
+    "\n"
+    "| Method | Score |\n"
+    "| A | 1 |\n"
+    "\n"
+    "$$y = kx$$\n"
+)
+
+
+def _write_layout(parsed: Path, blocks: list) -> None:
+    (parsed / "layout.json").write_text(json.dumps(blocks, ensure_ascii=False), encoding="utf-8")
+
+
+def test_mm_chunks_schema_and_global_invariant(tmp_path: Path) -> None:
+    parsed = _write_parsed(tmp_path, MM_MD)
+    _, chunks = build_chunks("p1", parsed, title="T")
+
+    mm_chunks = [c for c in chunks if c["modality"] != "text"]
+    assert sorted(c["modality"] for c in mm_chunks) == ["figure", "formula", "table"]
+    for c in mm_chunks:
+        assert MM_MD[c["char_start"] : c["char_end"]] == c["raw_snippet"], (
+            f"raw_snippet 不可回切: {c['modality']}"
+        )
+        assert c["metadata"]["element_type"] == c["modality"]
+        assert c["context_text"].startswith("[Title: T] [Section: Results]")
+
+    fig = next(c for c in mm_chunks if c["modality"] == "figure")
+    assert fig["chunk_id"] == hashlib.sha1(b"p1::0::figure::0").hexdigest()[:20]
+    assert fig["asset_rel_path"] == "figures/h1.jpg"
+    assert fig["asset_path"] is None  # 文件不存在
+    assert fig["page"] is None  # 无标记也无 layout
+    assert fig["text"].startswith("Figure: Arch overview\nContext: ")
+
+
+def test_mm_asset_path_resolves_when_file_exists(tmp_path: Path) -> None:
+    parsed = _write_parsed(tmp_path, "# S\n\n![](figures/h1.jpg)\n")
+    (parsed / "figures").mkdir()
+    (parsed / "figures/h1.jpg").write_bytes(b"jpg")
+    _, chunks = build_chunks("p1", parsed, title="T")
+
+    fig = next(c for c in chunks if c["modality"] == "figure")
+    assert fig["asset_path"] == str((parsed / "figures/h1.jpg").resolve())
+
+
+def test_layout_gives_figure_page_and_caption(tmp_path: Path) -> None:
+    """图块页码用自身 page_idx+1(md 无标记也有页), 图注补上空 alt 的语义。"""
+    parsed = _write_parsed(tmp_path, "# 架构\n\n![](figures/h1.jpg)\n", language="zh")
+    _write_layout(
+        parsed,
+        [
+            {
+                "type": "image",
+                "img_path": "images/h1.jpg",
+                "page_idx": 4,
+                "img_caption": ["图1 测试架构"],
+            }
+        ],
+    )
+    _, chunks = build_chunks("p1", parsed, title="中文论文")
+
+    fig = next(c for c in chunks if c["modality"] == "figure")
+    assert fig["page"] == 5
+    assert fig["text"].startswith("图: 图1 测试架构\n上下文: ")
+
+
+def test_layout_retypes_table_image(tmp_path: Path) -> None:
+    """配对到 layout table 块的图片重定型为 table, id 命名空间保持抽取器 kind。"""
+    parsed = _write_parsed(tmp_path, "# 实验\n\n![](figures/h2.jpg)\n", language="zh")
+    _write_layout(
+        parsed,
+        [
+            {
+                "type": "table",
+                "img_path": "images/h2.jpg",
+                "page_idx": 8,
+                "table_caption": ["表1 对比数据"],
+            }
+        ],
+    )
+    _, chunks = build_chunks("p1", parsed, title="中文论文")
+
+    tab = next(c for c in chunks if c["modality"] == "table")
+    assert tab["page"] == 9
+    assert tab["text"].startswith("表:\n表1 对比数据\n上下文: ")
+    assert tab["metadata"]["element_type"] == "table"
+    assert tab["chunk_id"] == hashlib.sha1(b"p1::0::figure::0").hexdigest()[:20]
+
+
+def test_corrupt_layout_degrades_to_baseline(tmp_path: Path) -> None:
+    parsed = _write_parsed(tmp_path, "# S\n\n![alt text](figures/h1.jpg)\n")
+    (parsed / "layout.json").write_text("{broken", encoding="utf-8")
+    _, chunks = build_chunks("p1", parsed, title="T")  # 不抛错
+
+    fig = next(c for c in chunks if c["modality"] == "figure")
+    assert fig["page"] is None
+    assert fig["text"].startswith("Figure: alt text\nContext: ")

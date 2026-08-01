@@ -324,6 +324,30 @@
   核心 RAG 链跑通后再建（需视觉 API key/本地模型，且 QA 跑通后才能度量价值）；
   同时发现依赖顺序修正：ingest_pipeline import embed.bge_m3，故 P5 先建
   `embed/bge_m3.py` 再收 `store/ingest_pipeline.py`。
+- `embed/bge_m3.py` 课次已完成（2026-08-01，已提交为 `a91a30b`，P5 第一课）：
+  BGE-M3 稠密嵌入封装，入库(ingest_pipeline)与查询(retrieve/dense)共用的
+  唯一向量出口。与基准 1:1 保真：惰性单例 `_model()`（首次 encode 才 import
+  FlagEmbedding）、设备策略（auto: macOS 强制 CPU / CUDA 优先）、fp16 仅
+  非 CPU、`resolve_cached_snapshot` 离线缓存、只取 dense 1024 维（sparse 走
+  BM25/FTS5）、空输入返回 []；唯一差异 Iterable 改 collections.abc。零中文
+  代码扩展的一课：BGE-M3 原生多语种中英同空间，中文约束落在验收断言。环境
+  准备：`uv sync --extra dev --extra embed --extra ingest --extra mineru`
+  装入 FlagEmbedding 1.4.0（教训：只 sync 部分 extra 会卸掉其余 extra 的包，
+  首次漏 dev 卸了 pre-commit/fastapi，补回后全量 287 passed 确认无损；四个
+  extra 必须齐）；BAAI/bge-m3 预下载到项目本地 data/index/models（4.3G HF
+  布局，双权重 blob 硬链接，全局 ~/.cache/huggingface 无污染，二跑日志显示
+  本地快照路径证明离线加载）。边界测试 RED 5 failed → GREEN 5（假模型验
+  批参数传递/只取 dense/tolist 转换/空输入不碰模型/生成器输入）；真实集成
+  测试 tests/test_bge_m3_real.py 3 passed（无 mock 真加载）。用户实跑验收
+  `scripts/demo_bge_m3.py` exit 0：真实中英混批 16 条全 1024 维数值健康、
+  批次一致性余弦 1.0000、真实中文查询"区块链节点的信用值如何评价和更新"在
+  中文期刊 62 个真实块上 top-3 全部命中"基于综合能源服务的信用评价体系"节
+  （0.683/0.666/0.659 vs 全体均值 0.586）、中英同义句对 0.772 vs 不相关
+  0.376（中英同空间实证，zh/en 同索引的模型侧前提成立）。课后用户两问均
+  已核实答复：真实验收确实真加载模型（CUDA fp16 日志 + 本地快照路径）；
+  应用户要求 Demo 增加向量落盘 demo-bge-m3-data/embeddings.json（查询 +
+  top-3 chunk 完整 1024 维向量，L2 归一范数≈1、分量 ±0.23、全非零，
+  余弦=点积与 Qdrant cosine 距离配合）。
 
 ## 已关闭/已诊断问题的细节
 
@@ -397,3 +421,5 @@
 - `d988ebc docs(course): 记录切块组装器完成与真实验收结论`
 - `4459315 docs(course): 记录打分器课次完成并更新协作规则`
 - `a972bd8 feat(chunk): 多模态切块语言路由、layout 图注页码增强与表重定型`
+- `b07c363 docs(course): 记录切块层收官与嵌入课依赖顺序修正`
+- `a91a30b feat(embed): BGE-M3 稠密嵌入封装与中英同空间真实验收`

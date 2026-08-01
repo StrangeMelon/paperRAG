@@ -13,16 +13,22 @@
   `text_chunker.py` ✅（2026-08-01 一课完成 RED 16 failed → GREEN 16 passed、
   全量 212 passed、Ruff 全绿、`scripts/demo_text_chunker.py` 4 份真实产物验收
   exit 0；已提交为 `55b4e3d`，细节见归档）；`contextual.py` ✅（2026-08-01
-  同日连课，RED 9 → GREEN 9、全量 221 passed、Ruff 全绿；**待用户提交**，建议
-  message 与文件清单见归档）。
-- **唯一下一步**：`parse/page_markers.py` 小课次（方案 A 已确认，见下方"页码
-  归属"条目；按 2026-08-01 新分工由助手直接实现并接入 MinerU 标准化；真实验收用
-  `demo-mineru-data/` 真实产物、无 mock。功能为偏移对齐，预计语言中立，动手前
-  仍过一遍英文隐式假设清单）。
+  同日连课，RED 9 → GREEN 9、全量 221 passed、Ruff 全绿；已提交为 `39e296f`）；
+  `parse/page_markers.py` 小课次 ✅（2026-08-01，RED 12 → GREEN 12、全量
+  233 passed、解析层回归 47 passed、真实验收 3 份 MinerU 产物双通道 exit 0；
+  已提交为 `395309d`；注标产物持久化在 `demo-page-markers-data/`，可作 builder
+  课真实链路 Demo 的现成输入）；`builder.py` ✅（2026-08-01 同日连课，RED 8
+  failed → GREEN 8 passed、全量 241 passed、Ruff 全绿、
+  `scripts/demo_builder.py` 4 份真实产物（2 解析器 × 中英双语）验收 exit 0；
+  已提交为 `eb897ed`，细节见归档；chunks 产物持久化在 `demo-builder-data/`）。
+- **唯一下一步**：`sanity.py` 课次（切块产物质量检查）。动手前先读基准实现并列
+  英文隐式假设（长度阈值按 token 还是字符、英文启发式对中文块的误伤），并处理
+  "块检查观察"遗留决策点 a)（参考文献节 11 块入索引的去留）；提出方案经用户
+  确认，再按 RED → 实现 → GREEN → Ruff 的节奏进行。
 - 切块文件顺序：`section_splitter.py` ✅ → `text_chunker.py` ✅ →
-  `contextual.py` ✅ →（插入 `parse/page_markers.py` 小课次）→ `builder.py` →
-  `sanity.py` → `multimodal_chunker.py`。每个文件动手前先检查基准的英文隐式假设
-  （中文扩展约束）。
+  `contextual.py` ✅ → `parse/page_markers.py` ✅ → `builder.py` ✅ →
+  `sanity.py` → `multimodal_chunker.py`（该课同时把多模态循环 + vision enrich
+  钩子接回 builder）。每个文件动手前先检查基准的英文隐式假设（中文扩展约束）。
 - 源码基准：`/home/user_kyh/paper-rag-agent-main`（只读，不得写入）；重建目录：
   `/home/user_kyh/paper-rag-agent-rebuild`。
 
@@ -87,11 +93,22 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
   新增纯函数 `src/paper_rag/parse/page_markers.py::inject_page_markers(md, blocks)`：
   按 `layout.json`（MinerU content_list，块含 `type/text/page_idx`，0 基）在
   `page_idx` 跳变处用块文本前缀顺序对齐定位 md 偏移，插入 `<!-- page N -->`
-  （`N = page_idx + 1`，与 PyMuPDF 一致的 1 基）；定位失败跳过、优雅降级。已用
-  `demo-mineru-data/` 真实中文论文（15 页、159 块）验证 116 个非空文本块零失配。
-  排期：`builder.py` 之前插入小课次（助手写 RED：正常对齐、定位失败、空 layout、
-  0 基转 1 基；用户实现并接入 MinerU 标准化；真实验收用 `demo-mineru-data/`、无
-  mock）。splitter 为纯函数以单元测试验收；真实链路 Demo 推迟到 builder 完成后。
+  （`N = page_idx + 1`，与 PyMuPDF 一致的 1 基）；定位失败跳过、优雅降级。已于
+  2026-08-01 实现并提交（`395309d`，接入 `_normalize_into`：布局选择提前、
+  content_list 形态先注标再写 `paper.md`）。实现补充：锚定块最短长度双档（含
+  CJK ≥2 字符、纯 ASCII ≥4 字符，页脚页码不做锚点）；标记插在所在行行首。真实
+  验收：3 份 MinerU 产物注标 14/15、14/15、17/17 页，剥标后与存量产物逐字节
+  一致。**已记账边界**：纯图表页（content_list 只有空文本块）无锚可用不注标，
+  该页图表多模态 chunk 会继承前一页页码（±1 页误差），builder 课可评估用图块
+  自身 `page_idx` 兜底。
+- **块检查观察（2026-08-01，builder/sanity 课决策点）**：真实块检查发现三件事：
+  a) 参考文献节被切成 11 块进入索引（splitter 只过滤 References *之后*的内容，
+  节本身保留，基准同款），对 QA 检索是噪声，`sanity.py` 课对照基准决定去留
+  （**尚未处理，下一课的核心决策点**）；b) 中文期刊参考文献用全角点 `．`
+  （U+FF0E）作条目结束符，不在 zh 句读集合里导致该节走等分硬切，把 `．` 加入
+  zh 边界集是安全的一行改动（切多了无害），时机由用户定（尚未处理）；
+  c) `<!-- page N -->` 标记留在 chunk 文本里——builder 课已决策为**保留标记**
+  （基准同款；sanity 课可再评估清洗），已按此实现。
 - **chunker 接口与已确认偏离（2026-08-01，`text_chunker.py` 已实现）**：
   `chunk_text(body: str, *, language: str | None = None) -> list[TextChunk]`，配置仍走
   `chunk.text`（target/overlap/encoding，无新增项）。不变量强化为
@@ -116,6 +133,25 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
   形态整段移除（半/全角冒号均识别，基准会给每个 chunk 嵌入 `[Title: ]` 死架子），
   都空时直接返回原文；自定义模板不用括号形态时退化为基准的空串填入。值含花括号
   安全（format 语义）。纯函数仅单元测试验收，真实链路覆盖并入 builder 课 Demo。
+- **builder 已确认方案与实现（2026-08-01，已提交为 `eb897ed`）**：
+  `build_chunks(paper_id: str, parsed_dir: Path, *, title: str)` 签名与基准一致，
+  `language` 不进公开签名——builder 从 `parsed_dir/language.json` 读
+  `document_language`（缺失/损坏/域外值降级 `None` 不终止），是把语言贯通到
+  `split_sections`/`chunk_text`/`with_context` 的**全链唯一枢纽**。偏移精确化：
+  `md.index(body, sec.start)` 求 body 真实起点，全局不变量
+  `md[char_start:char_end] == chunk["text"]`（基准在节头多空行时整体漂移）。
+  页码归属 `_page_for_offset` 与基准同款（回扫最近 `<!-- page N -->`），标记
+  保留在 chunk 文本里。chunk 字典 schema 与基准完全一致（含
+  `metadata.section_level/chunk_ordinal`、`neighbors=[]`）。**已确认分片**：
+  多模态循环（figure/table/formula）与 vision enrich 钩子推迟到
+  `multimodal_chunker` 课一并接回（当前文本主路径不需要空 warning 的钩子）。
+  真实验收 4 份产物全部通过：中文期刊 16 节/61 块、Graph-Mamba MinerU 25/39、
+  LocAgent 26/45、Graph-Mamba PyMuPDF 9/40；MinerU 论文 chunk 从基准的
+  `page=None` 变为全员有页码且单调不减，偏移逐字节回切，zh 论文 context_text
+  全部中文模板；产物在 `demo-builder-data/parsed/<id>--{mineru|pymupdf}/
+  chunks.json`（同论文双解析器用来源后缀防覆盖）。**已记账边界**：纯图表页的
+  图块页码待 multimodal 课用图块自身 `page_idx` 兜底；页码标记被空行包围时
+  自成段落，极小 target 下会独立成块（真实 500 目标并入邻块，无影响）。
 
 ## 已确认的约束
 
@@ -163,8 +199,8 @@ collection；LLM、嵌入、MinerU 用真实配置/模型/API。
 
 1–6 采集（抽象契约、本地 PDF、URL、arXiv、OpenAlex、Semantic Scholar 边界）与
 7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）均已完成，提交清单见归档。
-当前为 8 切块：section splitter ✅ → text chunker → contextual →
-（page_markers 小课次）→ builder → sanity → multimodal chunker。
+当前为 8 切块：section splitter ✅ → text chunker ✅ → contextual ✅ →
+（page_markers 小课次 ✅）→ builder ✅ → sanity → multimodal chunker。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
 Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、

@@ -213,8 +213,8 @@
   密排 9 节 40 块（1469→499）。546 略超 target 源于硬切按字符等分而 BPE 密度
   不均（中文期刊无句读表格区），在文档化余量内。已记账边界与接口决定同步记入
   LEARNING_STATE 切块层一节。
-- `contextual.py` 已完成（2026-08-01，与 text_chunker 同日连课；**待用户提交**，
-  建议 message `feat(chunk): 上下文前缀语言路由与空值省略`，文件
+- `contextual.py` 已完成（2026-08-01，与 text_chunker 同日连课；已提交为
+  `39e296f`，用户将当时的课程文档更新一并纳入该提交；
   `src/paper_rag/chunk/contextual.py` + `tests/test_contextual.py` +
   `src/paper_rag/config.py`（+1 行）+ `config/default.yaml`（+1 行））。基准仅
   11 行：`chunk.context_prefix` 模板 format 后拼在 chunk 文本前；沿调用链确认的
@@ -229,6 +229,52 @@
   占位符）已测试。RED 9 failed（ModuleNotFound）→ GREEN 9 passed，全量
   221 passed，Ruff 全绿（config.py 仅 +1 行，其既有格式漂移未触碰）。纯函数无
   独立 Demo，真实链路覆盖并入 builder 课。
+- `parse/page_markers.py` 小课次已完成（2026-08-01，已提交为 `395309d`）：
+  `inject_page_markers(md, layout)` 按 content_list 块序推进游标、块文本前
+  20 字符 `md.find` 顺序对齐，每页第一个可定位文本块处在**行首**插入
+  `<!-- page N -->`（N = page_idx+1，1 基，与 PyMuPDF 同款；markdown 标题的
+  `# ` 不被拆开）。降级规则不抛错：非 list 布局（middle.json 形态）原样返回；
+  定位失败跳过该块、同页后续块兜底；锚定块最短长度双档（含 CJK ≥2 字符保
+  "引言/摘要"，纯 ASCII ≥4 字符拦页脚 "1"/"12" 假匹配）。接入
+  `_normalize_into`：布局选择提前到写 paper.md 之前，content_list 先注标再落盘，
+  layout.json 写盘不变。RED 12 failed（collection error）→ GREEN 12 passed、
+  全量 233 passed、解析层回归 47 passed。真实验收 `scripts/demo_page_markers.py`
+  双通道 exit 0：纯函数注标（中文期刊 15 页注 14、Graph-Mamba 15 页注 14、
+  LocAgent 17 页全注，页码严格递增、剥标逐字节还原）+ 集成强断言（真实
+  `_mineru_raw` 重跑 `_normalize_into`，剥标后与存量已验收 paper.md 逐字节
+  一致，证明"只多标记不动内容"）。缺页逐块诊断：两个缺页在 content_list 里
+  只有空文本块（纯图表页），属预期降级；连带影响（该页图表 chunk 继承前页
+  页码 ±1）记入 LEARNING_STATE 已记账边界。应用户要求，Demo 集成段产物持久化
+  到 `demo-page-markers-data/parsed/<id>/`（.gitignore 的 `demo-*-data/` 覆盖，
+  每轮只清理自己的产物；存量 demo-mineru-data 只读），供人工查看与 builder 课
+  复用。同日真实块检查（用户要求查看 chunk 形态）发现三个后续课次决策点
+  （参考文献节去留 / 全角点 `．` 入 zh 边界集 / 页标记混入 chunk 文本），
+  记入 LEARNING_STATE"块检查观察"。
+- `builder.py` 课次已完成（2026-08-01，已提交为 `eb897ed`）：切块层组装枢纽
+  `build_chunks(paper_id, parsed_dir, *, title) -> (sections, chunks)`，签名与
+  基准一致。课前方案经用户三项确认：多模态循环后补（multimodal_chunker 课接回，
+  vision enrich 钩子一并推迟——文本主路径挂钩子只会空打 warning）、偏移精确化
+  纳入本课修复、页码标记保留在 chunk 文本（块检查观察决策点 c 就此关闭）。
+  三处相对基准的差异：a) 语言贯通——新增 `_read_language` 从
+  `parsed_dir/language.json` 读 `document_language`（缺失/损坏/域外值如 `fr`
+  一律降级 None 不终止），传给 `split_sections`/`chunk_text`/`with_context`，
+  builder 是全链唯一语言枢纽；b) 偏移精确化——`md.index(body, sec.start)` 求
+  body 真实起点做绝对偏移基准（基准 sec.start + 相对偏移在节头多空行时整体
+  漂移），全局不变量升级为 `md[char_start:char_end] == chunk["text"]`；
+  c) 页码归属 `_page_for_offset` 与基准逐字节同款，但 MinerU 产物因上课注标
+  从全员 `page=None` 变为全员有页码（本链路核心修复）。chunk 字典 schema 与
+  基准完全一致。RED 8 failed（collection error）→ GREEN 8 passed（过程中修正
+  一个测试构造问题：页码标记被空行包围自成段落，极小 target=8 下独立成块，
+  断言改为 pages == [1, 2, 2] 并注释真实语义）→ 全量 241 passed → Ruff 全绿。
+  真实验收 `scripts/demo_builder.py` exit 0：输入组装自上课产物（MinerU 注标
+  md 来自 demo-page-markers-data + language.json 来自 demo-mineru-data；
+  PyMuPDF 原样），4 案例——中文期刊(zh) 16 节/61 块、Graph-Mamba MinerU(en)
+  25/39、LocAgent(en) 26/45、Graph-Mamba PyMuPDF(None) 9/40；逐 chunk 断言
+  md 切片逐字节回切、page 非空且单调不减、zh 论文 context_text 全部
+  `[标题: …]` 中文模板。首轮发现同一论文双解析器 sha1 目录互相覆盖，输出目录
+  加 `--mineru/--pymupdf` 来源后缀修复。产物持久化
+  `demo-builder-data/parsed/<id>--<flavor>/chunks.json`。中文期刊 61 块比
+  text_chunker 课的 60 多 1，是注入页码标记占 token 的自然结果。
 
 ## 已关闭/已诊断问题的细节
 
@@ -293,3 +339,6 @@
 - `ef7ed00 feat(chunk): 章节切分器切片 5 中文标题规则、阿拉伯点分编号与语言路由`
 - `5caefcb fix(chunk): 章节切分器真实验收修复数字直贴清洗与密排编号标题识别`
 - `55b4e3d feat(chunk): 文本切块器双语句子切分、CJK 回退计数与真实定位偏移`
+- `39e296f feat(chunk): 上下文前缀语言路由与空值省略`（含当时的课程文档更新）
+- `395309d feat(parse): MinerU 产物注入页码标记并接入标准化`
+- `eb897ed feat(chunk): 切块组装器语言贯通、页码归属与偏移精确化`

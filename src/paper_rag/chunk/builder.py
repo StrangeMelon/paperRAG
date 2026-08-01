@@ -9,6 +9,8 @@ Qdrant 入库。与基准的差异(2026-08-01 已确认):
   (基准的 sec.start + 相对偏移在节头有多余空行时整体漂移), 全局不变量
   md[char_start:char_end] == chunk["text"], 页码归属与溯源逐字节精确。
 - 页码标记保留在 chunk 文本里(基准同款, sanity 课再评估清洗)。
+- 参考文献类节的 chunk 打 metadata["is_references"]=True(基准无此标记), 块照常
+  入库, 检索层将来可据此降权/过滤(2026-08-01 sanity 课确认)。
 - 多模态块(figure/table/formula)与 vision enrich 在 multimodal_chunker 课接入,
   当前只组装文本主路径。
 """
@@ -38,6 +40,10 @@ def _section_id(paper_id: str, idx: int) -> str:
 
 
 _PAGE_RE = re.compile(r"<!--\s*page\s+(\d+)\s*-->")
+
+# 参考文献类节名(splitter 清洗后的整名): 其 chunk 打 is_references 标记照常入库,
+# 检索层将来可据此降权/过滤, 且不丢"本文引用了哪些工作"类问题的证据(2026-08-01 确认)
+_REFERENCES_SECTION_NAMES = {"references", "bibliography", "参考文献"}
 
 
 def _page_for_offset(text: str, offset: int) -> int | None:
@@ -84,9 +90,16 @@ def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[d
 
         # body 是 strip 过的切片, 真实起点可能晚于 sec.start(节头空行)
         body_base = md.index(raw_sec.body, raw_sec.start) if raw_sec.body else raw_sec.start
+        is_references = raw_sec.name.strip().lower() in _REFERENCES_SECTION_NAMES
         for i, tc in enumerate(chunk_text(raw_sec.body, language=language)):
             abs_start = body_base + tc.char_start
             abs_end = body_base + tc.char_end
+            metadata: dict = {
+                "section_level": raw_sec.level,
+                "chunk_ordinal": i,
+            }
+            if is_references:
+                metadata["is_references"] = True
             chunks.append(
                 {
                     "chunk_id": _chunk_id(paper_id, raw_sec.idx, "text", i),
@@ -104,10 +117,7 @@ def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[d
                     "source_path": source_path,
                     "char_start": abs_start,
                     "char_end": abs_end,
-                    "metadata": {
-                        "section_level": raw_sec.level,
-                        "chunk_ordinal": i,
-                    },
+                    "metadata": metadata,
                     "neighbors": [],
                 }
             )

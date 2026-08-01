@@ -5,6 +5,8 @@
 切片 2: 页码归属(<!-- page N --> 回扫、无标记 page=None、多块跨页)。
 切片 3: 偏移精确化(全局不变量 md[abs_start:abs_end] == chunk.text,
         含基准会漂移的"节头多空行"场景)。
+切片 4: 参考文献打标(References/参考文献 节的块 metadata["is_references"]=True,
+        普通块不带该键, 与基准 schema 逐键一致)。
 
 接口约定(与基准一致, 2026-08-01 确认):
 
@@ -176,3 +178,35 @@ def test_offset_invariant_survives_extra_blank_lines(tmp_path: Path) -> None:
     assert len(chunks) == 1
     c = chunks[0]
     assert md[c["char_start"] : c["char_end"]] == c["text"] == "Intro paragraph body text."
+
+
+# ---------------------------------------------------------------------------
+# 切片 4: 参考文献打标(2026-08-01 sanity 课确认: 保留块 + metadata 标记)
+# ---------------------------------------------------------------------------
+
+
+def test_references_section_chunks_are_flagged(tmp_path: Path) -> None:
+    md = (
+        "# Introduction\n\nIntro paragraph body text.\n\n"
+        "# References\n\n[1] Some Author. Some paper title. 2024.\n"
+    )
+    parsed = _write_parsed(tmp_path, md)
+    _, chunks = build_chunks("p1", parsed, title="T")
+
+    refs = [c for c in chunks if c["section"] == "References"]
+    others = [c for c in chunks if c["section"] != "References"]
+    assert refs and others
+    for c in refs:
+        assert c["metadata"]["is_references"] is True
+    for c in others:
+        assert "is_references" not in c["metadata"]  # 普通块 schema 与基准逐键一致
+
+
+def test_zh_references_section_chunks_are_flagged(tmp_path: Path) -> None:
+    md = "# 引言\n\n中文正文第一段内容。\n\n# 参考文献\n\n[1] 作者. 论文标题. 2024.\n"
+    parsed = _write_parsed(tmp_path, md, language="zh")
+    _, chunks = build_chunks("p1", parsed, title="中文论文")
+
+    refs = [c for c in chunks if c["section"] == "参考文献"]
+    assert refs
+    assert all(c["metadata"]["is_references"] is True for c in refs)

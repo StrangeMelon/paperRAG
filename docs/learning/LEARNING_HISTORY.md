@@ -348,6 +348,34 @@
   应用户要求 Demo 增加向量落盘 demo-bge-m3-data/embeddings.json（查询 +
   top-3 chunk 完整 1024 维向量，L2 归一范数≈1、分量 ±0.23、全非零，
   余弦=点积与 Qdrant cosine 距离配合）。
+- `store/ingest_pipeline.py` 课次已完成（2026-08-02 用户实跑验收通过，P5 收口；
+  功能文件提交待用户执行，hash 下次进度更新时补记）：整链编排唯一入口
+  `ingest(result, *, force=False)`，与基准同构（状态机 fetched→…→done、`_step`
+  逐步记 ingest_runs、DOI>arxiv>标题三级去重 merged_into、done 跳过/force
+  重建、元数据卡片插 chunks[0]、grade_sections 拼 parsed_with、Qdrant 先删后
+  插替换语义）。方案三项经用户确认后的偏离：a) 语言贯通——builder
+  `_read_language` 提升公开 `read_language`，pipeline 读 language.json 同一
+  语言值喂 grade_sections（基准不传语言会误判中文论文）与元数据卡片模板；
+  b) 卡片按语言路由——`_CARD_LABELS` 双语文案表（zh: 论文元数据记录。/标题:/
+  作者:/年份:/摘要:），`_title_aliases` 缩写逻辑保持基准（中文标题优雅空集）；
+  c) wiki 入队钩子接回（try/except 非致命 warning，与 vision 同策）。另发现并
+  修复**基准死代码缺陷**：真空 chunks 守卫位于插卡之后，卡片必然存在使其永不
+  触发；重建版前移到插卡之前（测试锁定）。边界测试 11 个（RED collection
+  error → GREEN；全下游打桩：状态机顺序/卡片位次/zh 贯通到打分与卡片/去重/
+  幂等/force/失败隔离/死代码修复），全量 296 passed、Ruff 全绿。真实验收
+  `scripts/demo_ingest_pipeline.py` **全链首次端到端**（用户实跑 exit 0，与
+  预期逐项一致）：真实 Graph-Mamba PDF → 真实 GPU MinerU（本篇仅约 11s）→
+  49+1 chunks（卡片别名 GM）→ BGE-M3 → embedded Qdrant 50 点；
+  parsed_with=mineru+complete、ingest_runs 四步全 ok、真实问题
+  "How does Graph-Mamba capture long-range dependencies..." top-1 命中本论文
+  Introduction 块(0.741)、重复 ingest → skipped/done、force 重建后点数不变。
+  隔离设计：运行数据全落 demo-ingest-pipeline-data/（配置 monkeypatch 重定向
+  paths+qdrant.local_path，models_dir 保持真实缓存只读复用）。课后答疑三则：
+  向量双库分工（SQLite 无向量列存内容/溯源/FTS 底座，Qdrant 存向量+payload
+  拷贝免回表）；数据库位置与打开方式（sqlite3 CLI + qdrant_client 片段）；
+  远程 dashboard 访问（服务器有长跑 paper-rag-qdrant 容器 6333，VS Code/SSH
+  端口转发 + embedded→服务模式一次性拷贝脚本 demo_pipeline_chunks 隔离
+  collection）。
 
 ## 已关闭/已诊断问题的细节
 

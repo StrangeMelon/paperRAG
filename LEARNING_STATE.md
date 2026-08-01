@@ -17,23 +17,39 @@
   `multimodal_chunker.py` ✅（2026-08-01，含 builder 多模态循环/layout 增强/
   vision 钩子接回，`a972bd8`，本课首次按新验收流程由用户实跑测试与 Demo 并
   与预期对比通过，细节见归档）。
-- **唯一下一步**：`store/ingest_pipeline.py` 课次（P5 整链收口：采集→解析→
-  切块→嵌入→SQLite/Qdrant 索引的编排器 + 分步状态机/失败隔离）。动手前先读
-  基准实现并列隐式假设（分步 `_step` 状态推进、幂等去重、元数据 chunk、
-  Qdrant 替换式写入），对照重建版已有的 sqlite/qdrant/parse/ingest 接口核对
-  签名差异，提出方案经确认后再动手；真实验收 = 一篇真实论文端到端入库。
-- **P5 进度**：`embed/bge_m3.py` ✅（2026-08-01，已提交为 `a91a30b`。与基准
-  1:1 保真（惰性单例/设备策略/fp16 规则/只取 dense 1024 维），零中文代码
-  扩展——BGE-M3 原生中英同空间，中文约束落在真实验收断言。边界测试 RED 5 →
-  GREEN 5（假模型验批参数/tolist/空输入），真实集成测试 3 passed，全量 287
-  passed。用户实跑 `scripts/demo_bge_m3.py` exit 0：真实中英混批 1024 维、
-  批次一致性 1.0000、中文查询在 62 真实块上 top-3 全部命中"信用评价体系"节
-  （0.68 级 vs 均值 0.586）、中英同义句对 0.772 vs 不相关 0.376；向量落盘
-  `demo-bge-m3-data/embeddings.json`（应用户要求含完整 1024 维）。环境：
-  `uv sync --extra dev --extra embed --extra ingest --extra mineru`（**四个
-  extra 必须齐**，漏 dev 会卸掉 pre-commit/fastapi）；模型已预下载到项目本地
-  `data/index/models/models--BAAI--bge-m3`（4.3G，HF 布局，
-  `resolve_cached_snapshot` 离线命中，全局 ~/.cache 无污染））。
+- **唯一下一步**：**先补提交 ingest_pipeline 功能文件**（用户执行，见下），然后进入
+  P6 检索层开题。建议课次顺序（按依赖与体量）：`retrieve/dense.py`（12 行薄封装，
+  qdrant.search + bge 编码）→ `fts5.py`（169 行，SQLite FTS5 稀疏检索）→
+  `sparse_bm25.py`（124 行，BM25 pickle 索引）→ `hybrid.py`（RRF 融合）→
+  `rerank.py`（BGE reranker）→ `format.py`/`pipeline.py`（组合入口）。**中文扩展
+  重点提前预告**：FTS5 默认 unicode61 分词器不切中文词、BM25 若按空格分词对中文
+  同样失效——稀疏检索双课是检索层最大的中文适配点，动手前必须核对基准分词方案。
+- **待用户执行的提交**（ingest_pipeline 课验收已通过 2026-08-02）：
+  ```
+  git add src/paper_rag/store/ingest_pipeline.py src/paper_rag/chunk/builder.py tests/test_ingest_pipeline.py scripts/demo_ingest_pipeline.py
+  # feat(store): 入库流水线整链编排、语言贯通与端到端真实验收
+  ```
+- **P5 进度（两课全部完成，P5 收口）**：`embed/bge_m3.py` ✅（`a91a30b`；环境
+  同步命令 `uv sync --extra dev --extra embed --extra ingest --extra mineru`，
+  **四个 extra 必须齐**，漏 dev 会卸掉 pre-commit/fastapi；BGE-M3 已缓存在
+  项目本地 `data/index/models`，4.3G 离线命中）；
+  `store/ingest_pipeline.py` ✅（2026-08-02 验收通过，提交待用户执行。与基准
+  同构：状态机/_step 记录/三级去重/force/元数据卡片/打分拼 parsed_with/Qdrant
+  替换语义。四处确认偏离：a) 语言贯通——builder `_read_language` 提升公开
+  `read_language`，同一语言值喂 grade_sections 与元数据卡片；b) 卡片模板按
+  语言路由（`_CARD_LABELS` 双语文案表，zh 用 论文元数据记录。/标题:/作者:…，
+  缩写词逻辑保持基准中文优雅空集）；c) **发现并修复基准死代码缺陷**——
+  "chunks 为空则 failed" 守卫在插元数据卡片之后永不触发，重建版前移到插卡前；
+  d) wiki 钩子接回（非致命 warning，与 vision 同策）。边界测试 11 个全下游
+  打桩；全量 296 passed；用户实跑 `scripts/demo_ingest_pipeline.py` **端到端**
+  exit 0：真实 Graph-Mamba PDF → MinerU GPU → 50 chunks（含卡片，别名 GM）→
+  BGE-M3 → embedded Qdrant，parsed_with=mineru+complete、四步 ingest_runs 全
+  ok、真实问题检索 top-1 命中本论文 Introduction(0.741)、重复 ingest skipped、
+  force 重建点数 50 不变。运行数据隔离在 `demo-ingest-pipeline-data/`
+  （SQLite WAL + embedded Qdrant，双库落地已现场核验：SQLite 无向量列存内容
+  溯源，Qdrant 存 1024 维向量+payload 拷贝）。服务器另有 `paper-rag-qdrant`
+  服务容器(6333)长跑，dashboard 经 SSH/VS Code 端口转发可视化，embedded 与
+  服务模式数据互不相通，已给用户拷贝浏览脚本）。
 - 源码基准：`/home/user_kyh/paper-rag-agent-main`（只读，不得写入）；重建目录：
   `/home/user_kyh/paper-rag-agent-rebuild`。
 
@@ -43,8 +59,10 @@
 
 ```text
 请继续 /home/user_kyh/paper-rag-agent-rebuild 的后端重建课程。先完整读取
-LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现有改动，
-从状态文件记录的唯一下一步继续。
+LEARNING_STATE.md 和 AGENTS.md，再只读检查 Git 状态；不要回退任何现有改动，
+从状态文件记录的唯一下一步继续。分工按状态文件"协作规则"：你写代码并自跑
+开发自查，课程文档由你提交，功能文件由我提交；每课先讲为什么再讲怎么实现，
+最终验收命令和预期效果交给我实跑对比。
 ```
 
 恢复顺序：
@@ -226,8 +244,10 @@ collection；LLM、嵌入、MinerU 用真实配置/模型/API。
 1–6 采集（抽象契约、本地 PDF、URL、arXiv、OpenAlex、Semantic Scholar 边界）、
 7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）与 8 切块（section
 splitter → text chunker → contextual → page_markers → builder → sanity →
-multimodal chunker，7 文件全部 ✅）均已完成，提交清单见归档。当前进入 P5：
-`embed/bge_m3.py` ✅ → `store/ingest_pipeline.py`（整链编排，当前课次）。
+multimodal chunker，7 文件全部 ✅）均已完成，提交清单见归档。P5（嵌入与入库）
+已完成：`embed/bge_m3.py` ✅ → `store/ingest_pipeline.py` ✅（提交待用户执行）。
+当前进入 P6 检索层：dense → fts5 → sparse_bm25 → hybrid(RRF) → rerank →
+format/pipeline。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
 Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、

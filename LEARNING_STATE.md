@@ -6,36 +6,22 @@
 
 ## 当前定位
 
-- 当前阶段：P4（采集、解析和切块）；当前课次：P4.10（切块模块）。
+- 当前阶段：P4（采集、解析和切块）**已全部完成**（2026-08-01 切块层收官）；
+  当前课次：P5（嵌入与入库流水线）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
-- 切块进度：`section_splitter.py` ✅（切片 0–5b，提交至 `5caefcb`）；
-  `text_chunker.py` ✅（2026-08-01 一课完成 RED 16 failed → GREEN 16 passed、
-  全量 212 passed、Ruff 全绿、`scripts/demo_text_chunker.py` 4 份真实产物验收
-  exit 0；已提交为 `55b4e3d`，细节见归档）；`contextual.py` ✅（2026-08-01
-  同日连课，RED 9 → GREEN 9、全量 221 passed、Ruff 全绿；已提交为 `39e296f`）；
-  `parse/page_markers.py` 小课次 ✅（2026-08-01，RED 12 → GREEN 12、全量
-  233 passed、解析层回归 47 passed、真实验收 3 份 MinerU 产物双通道 exit 0；
-  已提交为 `395309d`；注标产物持久化在 `demo-page-markers-data/`，可作 builder
-  课真实链路 Demo 的现成输入）；`builder.py` ✅（2026-08-01 同日连课，RED 8
-  failed → GREEN 8 passed、全量 241 passed、Ruff 全绿、
-  `scripts/demo_builder.py` 4 份真实产物（2 解析器 × 中英双语）验收 exit 0；
-  已提交为 `eb897ed`，细节见归档；chunks 产物持久化在 `demo-builder-data/`）；
-  `sanity.py` ✅（2026-08-01 同日连课，含两个决策点落地共三个提交
-  `800a531`/`b055e8f`/`e641019`，RED 15 → GREEN 15、全量 266 passed、Ruff
-  全绿、`scripts/demo_sanity.py` 4 份真实产物验收 exit 0，细节见归档）。
-- **唯一下一步**：`multimodal_chunker.py` 课次（切块层最后一个文件：
-  figure/table/formula 多模态块），并把多模态循环 + vision enrich 钩子接回
-  `builder.py`。动手前先读基准实现并列英文隐式假设，注意记账中的优化点：
-  纯图表页的图块可用自身 `page_idx` 兜底页码（builder 文本块靠标记回扫，
-  图块有更准的原生页码）。按新教学顺序：先讲为什么/有什么用 → 再讲怎么实现
-  → 中文扩展方案经用户确认 → RED → 实现 → GREEN → Ruff → 给出验收命令与
-  预期输出，由用户实跑对比。
-- 切块文件顺序：`section_splitter.py` ✅ → `text_chunker.py` ✅ →
-  `contextual.py` ✅ → `parse/page_markers.py` ✅ → `builder.py` ✅ →
-  `sanity.py` ✅ → `multimodal_chunker.py`（该课同时把多模态循环 + vision
-  enrich 钩子接回 builder）。每个文件动手前先检查基准的英文隐式假设
-  （中文扩展约束）。
+- 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
+  `text_chunker.py` ✅（`55b4e3d`）；`contextual.py` ✅（`39e296f`）；
+  `parse/page_markers.py` ✅（`395309d`）；`builder.py` ✅（`eb897ed`）；
+  `sanity.py` ✅（含决策点落地 `800a531`/`b055e8f`/`e641019`）；
+  `multimodal_chunker.py` ✅（2026-08-01，含 builder 多模态循环/layout 增强/
+  vision 钩子接回，`a972bd8`，本课首次按新验收流程由用户实跑测试与 Demo 并
+  与预期对比通过，细节见归档）。
+- **唯一下一步**：`embed/bge_m3.py` 课次（BGE-M3 稠密嵌入封装）。依赖顺序修正：
+  原计划下一课 `store/ingest_pipeline.py` 会 import `embed.bge_m3`，故先建
+  embed 再收整链。动手前先读基准实现并列隐式假设（BGE-M3 本身多语种，重点看
+  批处理、维度、设备与缓存约定；真实验收需 GPU/模型下载）。之后是
+  `store/ingest_pipeline.py`（采集→解析→切块→嵌入→索引整链编排 + 断点状态机）。
 - 源码基准：`/home/user_kyh/paper-rag-agent-main`（只读，不得写入）；重建目录：
   `/home/user_kyh/paper-rag-agent-rebuild`。
 
@@ -139,6 +125,22 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
   形态整段移除（半/全角冒号均识别，基准会给每个 chunk 嵌入 `[Title: ]` 死架子），
   都空时直接返回原文；自定义模板不用括号形态时退化为基准的空串填入。值含花括号
   安全（format 语义）。纯函数仅单元测试验收，真实链路覆盖并入 builder 课 Demo。
+- **multimodal 已确认方案与实现（2026-08-01，已提交为 `a972bd8`）**：三个抽取器
+  `extract_figures/tables/formulas(body, *, language=None)`，识别正则与守卫和
+  基准逐字一致。三处偏离：a) 嵌入前缀语言路由（zh 用 图:/表:/公式:/上下文:/
+  路径:，en/None 用基准英文；`compose_*_text` 模板助手公开导出）；b) 表格块
+  span 与 strip 后的 raw 对齐，不变量 `body[char_start:char_end] == raw` 三类
+  块都成立；c) `MMChunk` 增带 alt/context 原料字段。builder 侧 layout 增强
+  （基准无）：`_load_layout_assets` 按图片 basename 配对 layout.json 的
+  image/table 块——图块页码优先用自身 `page_idx+1`（纯图表页从此有页码，
+  关闭记账优化点）、`img_caption` 注入嵌入文本（真实产物 alt 全空，图注是图的
+  语义本体）、配对到 table 块的图片**重定型为 `modality="table"`** 用
+  `table_caption`；`chunk_id` 命名空间保持抽取器 kind 防撞 id；layout 缺失/
+  损坏/异形优雅降级回基准。vision enrich 钩子按基准同款接回（try/except，
+  vision 模块未建前每次 build 打一行 warning，属预期诚实信号）。真实验收
+  发现：OCR 模式下 MinerU 把表格全部渲染成图片，三篇论文合计 23 张表
+  （5/7/11）靠重定型找回正确身份；PyMuPDF 密排版面三类元素实测零召回
+  （基准 docstring 承认的 reduced recall，如实记账）。
 - **builder 已确认方案与实现（2026-08-01，已提交为 `eb897ed`）**：
   `build_chunks(paper_id: str, parsed_dir: Path, *, title: str)` 签名与基准一致，
   `language` 不进公开签名——builder 从 `parsed_dir/language.json` 读
@@ -209,10 +211,11 @@ collection；LLM、嵌入、MinerU 用真实配置/模型/API。
 
 ## P4 固化顺序
 
-1–6 采集（抽象契约、本地 PDF、URL、arXiv、OpenAlex、Semantic Scholar 边界）与
-7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）均已完成，提交清单见归档。
-当前为 8 切块：section splitter ✅ → text chunker ✅ → contextual ✅ →
-（page_markers 小课次 ✅）→ builder ✅ → sanity ✅ → multimodal chunker。
+1–6 采集（抽象契约、本地 PDF、URL、arXiv、OpenAlex、Semantic Scholar 边界）、
+7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）与 8 切块（section
+splitter → text chunker → contextual → page_markers → builder → sanity →
+multimodal chunker，7 文件全部 ✅）均已完成，提交清单见归档。当前进入 P5：
+`embed/bge_m3.py` → `store/ingest_pipeline.py`（整链编排）。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
 Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、
@@ -229,6 +232,11 @@ Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前�
   API key 后先跑 Demo，再补无 mock 集成测试。
 - `AGENTS.md`、`CLAUDE.md`、`scripts/demo_semantic_scholar_source.py` 为未跟踪文件，
   助手不得擅自纳入提交。
+- `vision/` 模块推迟到核心 RAG 链（嵌入→存储→检索→QA）跑通之后（2026-08-01
+  与用户确认）：基准默认 `vision.enabled: false`，builder 钩子已接回、行为与
+  基准默认态等价，仅多一行 warning 诚实信号。届时真实验收需要
+  `VISION_BASE_URL`/`VISION_API_KEY` 或本地视觉模型（GPU），且 QA 跑通后才能
+  真实对比"带视觉摘要 vs 只有图注"的检索差异。
 - 全量测试须用 `uv run python -m pytest`（把工作目录纳入 sys.path），否则
   `scripts.init_store` 用例导入失败。真实测试缺服务/密钥时按约定明确失败不 skip，
   需单独运行。全量 Ruff 的既有历史问题位于 `scripts/demo_qdrant_store.py`、

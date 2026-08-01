@@ -300,6 +300,30 @@
   参考文献从等分硬切变为按条目边界切（块尾均为 `…[J]．`/`…et al．` 完整条目），
   重跑 demo_text_chunker/demo_builder 均 exit 0（块数 60→61 / 61→62，上界
   看护不变，最大 546 块是无句读表格区与参考文献无关）。
+- `multimodal_chunker.py` 课次已完成（2026-08-01，已提交为 `a972bd8`，切块层
+  7 文件收官）：课前真实数据侦查改变了方案重心——三篇 MinerU 论文的 md 里
+  0 管道表、0 `$$` 公式、只有图片（19/10/16 个 `![]` 且 alt 全空）；
+  layout.json 里 image 块带 img_caption/page_idx，table 块（5/7/11 个）带
+  table_caption 和自己的 img_path，md 图片与 layout 块 basename 同哈希可精确
+  配对（配对率 3 篇均 100%）。方案三项经用户确认：前缀语言路由、
+  layout 增强取"页码+图注+表重定型"最全档、vision 钩子本课接回。实现：
+  抽取器识别正则与基准逐字一致，`compose_figure/table/formula_text` 模板助手
+  公开导出（zh: 图:/表:/公式:/上下文:/路径:）；表格块 span 与 strip 后 raw
+  对齐（基准 span 含尾随换行不可回切）；builder `_load_layout_assets` 配对
+  增强 + 重定型，chunk_id 命名空间保持抽取器 kind 防撞，layout 异常优雅降级；
+  vision try/except 钩子按基准同款接回。RED 11 failed（collection error）→
+  GREEN 11、builder 新增切片 5 五个测试、聚焦 26 passed、全量 282 passed、
+  Ruff 全绿。**本课首次执行新验收流程**：助手只自查开发测试，验收命令与预期
+  效果交用户实跑对比——用户实跑 26 passed + `scripts/demo_multimodal_chunker.py`
+  exit 0，逐项与预期一致：mm 分布 19(图14/表5)/10(3/7)/16(5/11)、图注覆盖
+  19/19、10/10、9/16（LocAgent 7 个 layout 块自身无图注，如实记账）、PyMuPDF
+  零召回、每篇一行 vision warning（预期诚实信号）。真实收获：OCR 模式下
+  MinerU 把表格全渲染成图片，23 张表在基准链路会以"无 alt 的图"进索引，
+  重定型让它们带 `表: {真实表题}` 语义入库。课后用户问询 vision 模块作用与
+  顺序，确认其为可选增强（基准默认 enabled:false，无它系统完整），推迟到
+  核心 RAG 链跑通后再建（需视觉 API key/本地模型，且 QA 跑通后才能度量价值）；
+  同时发现依赖顺序修正：ingest_pipeline import embed.bge_m3，故 P5 先建
+  `embed/bge_m3.py` 再收 `store/ingest_pipeline.py`。
 
 ## 已关闭/已诊断问题的细节
 
@@ -371,3 +395,5 @@
 - `b055e8f feat(chunk): 参考文献块保留入库并打元数据标记`
 - `e641019 fix(chunk): 全角点加入中文句读边界集`
 - `d988ebc docs(course): 记录切块组装器完成与真实验收结论`
+- `4459315 docs(course): 记录打分器课次完成并更新协作规则`
+- `a972bd8 feat(chunk): 多模态切块语言路由、layout 图注页码增强与表重定型`

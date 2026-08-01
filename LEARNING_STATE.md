@@ -20,15 +20,22 @@
   课真实链路 Demo 的现成输入）；`builder.py` ✅（2026-08-01 同日连课，RED 8
   failed → GREEN 8 passed、全量 241 passed、Ruff 全绿、
   `scripts/demo_builder.py` 4 份真实产物（2 解析器 × 中英双语）验收 exit 0；
-  已提交为 `eb897ed`，细节见归档；chunks 产物持久化在 `demo-builder-data/`）。
-- **唯一下一步**：`sanity.py` 课次（切块产物质量检查）。动手前先读基准实现并列
-  英文隐式假设（长度阈值按 token 还是字符、英文启发式对中文块的误伤），并处理
-  "块检查观察"遗留决策点 a)（参考文献节 11 块入索引的去留）；提出方案经用户
-  确认，再按 RED → 实现 → GREEN → Ruff 的节奏进行。
+  已提交为 `eb897ed`，细节见归档；chunks 产物持久化在 `demo-builder-data/`）；
+  `sanity.py` ✅（2026-08-01 同日连课，含两个决策点落地共三个提交
+  `800a531`/`b055e8f`/`e641019`，RED 15 → GREEN 15、全量 266 passed、Ruff
+  全绿、`scripts/demo_sanity.py` 4 份真实产物验收 exit 0，细节见归档）。
+- **唯一下一步**：`multimodal_chunker.py` 课次（切块层最后一个文件：
+  figure/table/formula 多模态块），并把多模态循环 + vision enrich 钩子接回
+  `builder.py`。动手前先读基准实现并列英文隐式假设，注意记账中的优化点：
+  纯图表页的图块可用自身 `page_idx` 兜底页码（builder 文本块靠标记回扫，
+  图块有更准的原生页码）。按新教学顺序：先讲为什么/有什么用 → 再讲怎么实现
+  → 中文扩展方案经用户确认 → RED → 实现 → GREEN → Ruff → 给出验收命令与
+  预期输出，由用户实跑对比。
 - 切块文件顺序：`section_splitter.py` ✅ → `text_chunker.py` ✅ →
   `contextual.py` ✅ → `parse/page_markers.py` ✅ → `builder.py` ✅ →
-  `sanity.py` → `multimodal_chunker.py`（该课同时把多模态循环 + vision enrich
-  钩子接回 builder）。每个文件动手前先检查基准的英文隐式假设（中文扩展约束）。
+  `sanity.py` ✅ → `multimodal_chunker.py`（该课同时把多模态循环 + vision
+  enrich 钩子接回 builder）。每个文件动手前先检查基准的英文隐式假设
+  （中文扩展约束）。
 - 源码基准：`/home/user_kyh/paper-rag-agent-main`（只读，不得写入）；重建目录：
   `/home/user_kyh/paper-rag-agent-rebuild`。
 
@@ -101,14 +108,13 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
   一致。**已记账边界**：纯图表页（content_list 只有空文本块）无锚可用不注标，
   该页图表多模态 chunk 会继承前一页页码（±1 页误差），builder 课可评估用图块
   自身 `page_idx` 兜底。
-- **块检查观察（2026-08-01，builder/sanity 课决策点）**：真实块检查发现三件事：
-  a) 参考文献节被切成 11 块进入索引（splitter 只过滤 References *之后*的内容，
-  节本身保留，基准同款），对 QA 检索是噪声，`sanity.py` 课对照基准决定去留
-  （**尚未处理，下一课的核心决策点**）；b) 中文期刊参考文献用全角点 `．`
-  （U+FF0E）作条目结束符，不在 zh 句读集合里导致该节走等分硬切，把 `．` 加入
-  zh 边界集是安全的一行改动（切多了无害），时机由用户定（尚未处理）；
-  c) `<!-- page N -->` 标记留在 chunk 文本里——builder 课已决策为**保留标记**
-  （基准同款；sanity 课可再评估清洗），已按此实现。
+- **块检查观察（2026-08-01，三条决策点已全部关闭）**：a) 参考文献节块——
+  sanity 课确认**保留入库并打标** `metadata["is_references"]=True`（普通块
+  不带该键，schema 与基准逐键一致；四篇真实论文的参考文献块占比 20%–37%），
+  检索课拿真实评测数据再决定降权/过滤（提交 `b055e8f`）；b) 全角点 `．`
+  （U+FF0E）已加入 zh 句读边界集（一行修复 + 回归测试，提交 `e641019`；
+  真实效果：中文期刊参考文献从等分硬切变为按条目边界切）；c) 页码标记保留在
+  chunk 文本里——builder 课已按"保留标记"实现（基准同款）。
 - **chunker 接口与已确认偏离（2026-08-01，`text_chunker.py` 已实现）**：
   `chunk_text(body: str, *, language: str | None = None) -> list[TextChunk]`，配置仍走
   `chunk.text`（target/overlap/encoding，无新增项）。不变量强化为
@@ -173,13 +179,19 @@ LEARNING_STATE.md 和 AGENTS.md，再检查 Git 状态；不要回退任何现�
 ## 协作规则
 
 - （2026-08-01 更新分工）助手直接创建/修改**所有代码文件**（含 `src/paper_rag/`
-  正式功能文件、测试与 `scripts/` 脚本），并自行运行测试、Ruff 与 Demo 验证；
-  对话中只给出改动摘要与设计讲解，不再要求用户手抄代码。
-- **所有 Git 命令由用户执行**（checkpoint 提交、分支等）；助手在每个课次收尾时
-  给出建议的 `git add` 文件清单与 commit message。需要真实 GPU/外部服务的命令
-  也可由用户执行，助手提供命令与预期输出。
-- 用户明确要求"更新进度"时，助手维护课程文档（本文件与 `docs/learning/` 归档），
-  由用户单独提交，提交不得包含业务文件。
+  正式功能文件、测试与 `scripts/` 脚本），并在开发过程中自行运行测试与 Ruff；
+  对话中给出改动摘要与设计讲解，不要求用户手抄代码。
+- **Git 分工（2026-08-01 二次更新）**：`LEARNING_STATE.md` 与
+  `docs/learning/LEARNING_HISTORY.md` 两个课程文档由**助手自己提交**
+  （`docs(course)` 独立提交，不得夹带业务文件）；其余功能文件仍由**用户提交**，
+  助手在课次收尾给出建议的 `git add` 清单与 commit message。需要真实 GPU/外部
+  服务的命令也可由用户执行，助手提供命令与预期输出。
+- **教学顺序（2026-08-01 新增）**：每个功能模块开始前，先讲**为什么要写这个
+  文件、有什么作用**，再讲**功能怎么实现**（含基准英文隐式假设与中文扩展方案，
+  经用户确认），然后才动手编写代码。
+- **验收方式（2026-08-01 新增）**：代码写完后，**测试文件与真实验收脚本由用户
+  亲自执行**；助手先给出验收命令与预期效果（输出的样子），用户实跑后与预期
+  对比。助手开发过程中的 RED/GREEN 自查仍自行运行。
 - 每次只讲解和实现一个项目文件；测试可以作为该文件的前置验收契约。
 - Git message 使用 Conventional Commits：`<type>(<scope>): <中文摘要>`。
 - 提交新模块必须同时提交包入口 `__init__.py`（解析层教训：克隆即失败）；验证手段是
@@ -200,7 +212,7 @@ collection；LLM、嵌入、MinerU 用真实配置/模型/API。
 1–6 采集（抽象契约、本地 PDF、URL、arXiv、OpenAlex、Semantic Scholar 边界）与
 7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）均已完成，提交清单见归档。
 当前为 8 切块：section splitter ✅ → text chunker ✅ → contextual ✅ →
-（page_markers 小课次 ✅）→ builder ✅ → sanity → multimodal chunker。
+（page_markers 小课次 ✅）→ builder ✅ → sanity ✅ → multimodal chunker。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
 Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、

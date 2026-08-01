@@ -275,6 +275,31 @@
   加 `--mineru/--pymupdf` 来源后缀修复。产物持久化
   `demo-builder-data/parsed/<id>--<flavor>/chunks.json`。中文期刊 61 块比
   text_chunker 课的 60 多 1，是注入页码标记占 token 的自然结果。
+- `sanity.py` 课次已完成（2026-08-01，含两个决策点落地共三个提交
+  `800a531`/`b055e8f`/`e641019`）：基准 `sanity.py` 是**章节完整性打分器**而非
+  块过滤器——`grade_sections(section_names) -> complete|partial|minimal|broken`，
+  节名小写子串匹配四大区域（intro/method/experiment/conclusion），唯一调用方
+  `ingest_pipeline` 把结果拼进 `parsed_with="{parser}+{quality}"` 供日后过滤
+  坏解析，打分失败仅 warning。英文隐式假设：四张关键词表全英文，完美解析的
+  中文论文会被降级误判。重建版扩展（用户确认语言路由方案）：新增 `_AREAS_ZH`
+  四区中文关键词表，`grade_sections(names, *, language=None)`——zh 查中文表、
+  en 查英文表（=基准行为）、None 查双表并集；输出四值标签与基准逐字一致。
+  RED 15 failed（collection error）→ GREEN 15 passed。同课落地两个块检查观察
+  决策点（均经用户确认）：a) 参考文献块**保留入库并打标**——builder 给
+  References/Bibliography/参考文献 节的块加 `metadata["is_references"]=True`，
+  普通块不带该键（schema 与基准逐键一致），检索课拿真实评测数据再决定降权/
+  过滤（+2 测试）；b) 全角点 `．`（U+FF0E）加入 zh 句读边界集（一行修复
+  +1 回归测试）。全量 266 passed（`tests/test_mineru_bilingual_real.py` 2 例
+  按约定缺 `PAPER_RAG_REAL_ENGLISH_PDF` 环境变量明确失败不 skip，需单独带环境
+  跑，与本课无关）、7 个触碰文件 Ruff check+format 全绿。真实验收
+  `scripts/demo_sanity.py` exit 0（读 demo-builder-data 的 4 份 chunks.json）：
+  中文期刊 zh 路由判 complete，同批节名 en 路由（=基准真实行为）仅 minimal
+  （英文副标题的 architecture/model 碰巧命中 method 区）——基准对真实中文论文
+  的降级误判实锤；三篇英文/None 路由全 complete；4 份产物参考文献打标块
+  12/62、14/39、15/45、15/40（占比 20%–37%）。全角点修复真实效果：中文期刊
+  参考文献从等分硬切变为按条目边界切（块尾均为 `…[J]．`/`…et al．` 完整条目），
+  重跑 demo_text_chunker/demo_builder 均 exit 0（块数 60→61 / 61→62，上界
+  看护不变，最大 546 块是无句读表格区与参考文献无关）。
 
 ## 已关闭/已诊断问题的细节
 
@@ -342,3 +367,7 @@
 - `39e296f feat(chunk): 上下文前缀语言路由与空值省略`（含当时的课程文档更新）
 - `395309d feat(parse): MinerU 产物注入页码标记并接入标准化`
 - `eb897ed feat(chunk): 切块组装器语言贯通、页码归属与偏移精确化`
+- `800a531 feat(chunk): 章节完整性打分器中文关键词表与语言路由`
+- `b055e8f feat(chunk): 参考文献块保留入库并打元数据标记`
+- `e641019 fix(chunk): 全角点加入中文句读边界集`
+- `d988ebc docs(course): 记录切块组装器完成与真实验收结论`

@@ -4,7 +4,7 @@
 切片 1: 段落贪心打包、overlap 尾段携带与防重守卫、find 真实定位偏移(修正基准算术漂移)。
 切片 2: token 计数——tiktoken 主路径与无 tiktoken 时的双语回退(CJK 逐字计 1, 其余 len//4)。
 切片 3: 英文超长段落句子切分(小数点不切、贪心重打包)。
-切片 4: 中文超长段落句子切分(。！？；…与后随引号)、zh/en/None 语言路由、无标点硬切兜底。
+切片 4: 中文超长段落句子切分(。！？；…．与后随引号)、zh/en/None 语言路由、无标点硬切兜底。
 
 接口约定(切块层已确认方案, 2026-08-01):
 
@@ -278,6 +278,24 @@ def test_chinese_closing_quote_stays_with_sentence(monkeypatch) -> None:
     assert chunks[0].text == z1
     assert chunks[0].text.endswith("。”")
     assert chunks[1].text == z2
+
+
+def test_fullwidth_stop_is_a_zh_boundary(monkeypatch) -> None:
+    """全角点 ．(U+FF0E)是中文参考文献常用条目结束符, 判为 zh 句子边界。
+
+    修复前该形态段落无任何 zh 句读可用, 落到等分硬切(真实块检查决策点 b)。
+    """  # noqa: RUF002
+    mod = _chunker_module()
+    _patch_config(monkeypatch, target_tokens=14, overlap_tokens=0)
+    _force_fallback_tokens(monkeypatch, mod)
+
+    r1 = "王某．综合能源服务研究．"  # noqa: RUF001
+    r2 = "李某．区块链交互模型综述．"  # noqa: RUF001
+    body = f"{r1}{r2}"
+    chunks = mod.chunk_text(body, language="zh")
+
+    assert [c.text for c in chunks] == [r1, r2]
+    _assert_slice_invariant(body, chunks)
 
 
 def test_language_routing_zh_en_none(monkeypatch) -> None:

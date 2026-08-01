@@ -5,9 +5,10 @@
   (基准的 cursor 算术在 4 个以上连续换行时漂移, 末块 char_end 多算 2)。
 - 无 tiktoken 时的回退估算按码位区分: CJK(含全角标点)逐字计 1, 其余 len//4
   (基准的 len//4 对中文低估约 4-7 倍)。
-- 超过 target 的段落先按句子切分再打包: zh 用 。！？；… (后随引号归前句),
-  en 用 [.!?] + 空白(小数点不切), None 取并集; 完全无句读的病态段按 token
-  等分硬切, 保证任何 chunk 有上界(基准从不切分超长段落)。
+- 超过 target 的段落先按句子切分再打包: zh 用 。！？；…． (后随引号归前句,
+  全角点是中文参考文献条目结束符), en 用 [.!?] + 空白(小数点不切), None 取
+  并集; 完全无句读的病态段按 token 等分硬切, 保证任何 chunk 有上界
+  (基准从不切分超长段落)。
 - overlap 携带尾段加防重守卫: 尾段 token*2 > target 时放弃携带
   (基准会把接近 target 的尾段重复输出成独立 chunk); overlap_tokens 仍只作
   布尔开关, 与基准一致。
@@ -41,8 +42,9 @@ class _Unit:
 # CJK 码位区间: 部首/康熙/CJK 标点/假名/注音/统一表意, 兼容表意, 全角形式
 _CJK_RANGES = ((0x2E80, 0x9FFF), (0xF900, 0xFAFF), (0xFF00, 0xFFEF))
 
-# 中文句子边界: 句读(可连续, 如省略号/叹问连用)加零个或多个后随的收尾引号/括号
-_ZH_BOUNDARY_RE = re.compile(r"[。！？；…]+[”’』」）》〉】]*")  # noqa: RUF001
+# 中文句子边界: 句读(可连续, 如省略号/叹问连用)加零个或多个后随的收尾引号/括号;
+# 全角点 ．(U+FF0E)是中文参考文献常用条目结束符, 切多了无害(贪心重打包兜底)  # noqa: RUF003
+_ZH_BOUNDARY_RE = re.compile(r"[。！？；…．]+[”’』」）》〉】]*")  # noqa: RUF001
 # 英文句子边界: 终结标点加收尾引号/括号, 且后随空白或段尾(小数点 3.5 不切)
 _EN_BOUNDARY_RE = re.compile(r"[.!?]+[\"')\]]*(?=\s|$)")
 _UNION_BOUNDARY_RE = re.compile(f"(?:{_ZH_BOUNDARY_RE.pattern})|(?:{_EN_BOUNDARY_RE.pattern})")

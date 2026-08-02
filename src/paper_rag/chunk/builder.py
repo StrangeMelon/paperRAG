@@ -60,7 +60,7 @@ def _page_for_offset(text: str, offset: int) -> int | None:
     return page
 
 
-def _read_language(parsed_dir: Path) -> str | None:
+def read_language(parsed_dir: Path) -> str | None:
     """读解析层的语言标注; 缺失、损坏或域外取值一律降级 None。"""
     language_file = parsed_dir / "language.json"
     if not language_file.is_file():
@@ -126,7 +126,7 @@ def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[d
     md_path = parsed_dir / "paper.md"
     md = md_path.read_text(encoding="utf-8")
     source_path = str(md_path.resolve())
-    language = _read_language(parsed_dir)
+    language = read_language(parsed_dir)
     layout_assets = _load_layout_assets(parsed_dir)
 
     sections: list[dict] = []

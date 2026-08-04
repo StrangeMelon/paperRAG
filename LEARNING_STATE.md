@@ -91,9 +91,10 @@
     测试 18 passed、全量纯逻辑 481 passed、Ruff 干净、
     `scripts/demo_evidence_select.py` exit 0（真实检索链路：英文 overlap 0.750、
     中文 overlap 0.650 > 0 修复实证、单篇限额、两遍逐项一致）。
-    **待用户执行的功能提交**：
+    **待用户执行的功能提交**（含 ADR-0002，决策已成文
+    `docs/adrs/0002-evidence-select-cjk-overlap.md`）：
     `git add src/paper_rag/rag/evidence_select.py tests/test_evidence_select.py
-    scripts/demo_evidence_select.py`；
+    scripts/demo_evidence_select.py docs/adrs/0002-evidence-select-cjk-overlap.md`；
     message：`feat(rag): 确定性证据选择与 CJK bigram 词面重叠(P7 第四课)`。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、

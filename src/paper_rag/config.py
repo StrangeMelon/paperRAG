@@ -103,6 +103,12 @@ class _Abstain(BaseModel):
         "未在已索引文献中找到与该问题相关的内容。请确认问题与已入库的论文主题"
         "相符，或考虑通过 paper_ingest_tool 扩充语料库。"  # noqa: RUF001
     )
+    # 英文问题的拒答文案(qa_agentic 按问题语言路由; 基准单中文文案的确认偏离)
+    no_evidence_message_en: str = (
+        "No relevant content was found in the indexed papers. Please check that "
+        "the question matches the indexed corpus, or ingest more papers via "
+        "paper_ingest_tool."
+    )
 
 
 class _IntentTier(BaseModel):

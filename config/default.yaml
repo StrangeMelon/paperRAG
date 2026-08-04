@@ -85,6 +85,8 @@ rag:
     threshold_high: 0.48        # < high but >= low: weak_evidence (LLM called with insufficiency hint)
     min_chunks: 3               # number of top chunks averaged for the evidence score
     no_evidence_message: "未在已索引文献中找到与该问题相关的内容。请确认问题与已入库的论文主题相符，或考虑通过 paper_ingest_tool 扩充语料库。"
+    # 英文问题的拒答文案(qa_agentic 按问题语言路由)
+    no_evidence_message_en: "No relevant content was found in the indexed papers. Please check that the question matches the indexed corpus, or ingest more papers via paper_ingest_tool."
 
 llm:
   provider: openai_compatible

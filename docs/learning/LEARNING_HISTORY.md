@@ -741,6 +741,41 @@
   引用纪律；低分噪声 no_evidence_abstain + 作答零调用)。边界测试 19 passed +
   observability 8 passed；全量纯逻辑 588 passed；Ruff 干净；测试与 Demo 均在
   `env -u` 干净 shell 复跑通过。数据隔离在 `demo-qa-agentic-data/`。
+- **`rag/qa_stream.py`（P7 第十课·收官，2026-08-05）**：qa_agentic 的流式
+  变体——同一条管道改造成事件生成器，每阶段完成即刻 yield，前端(DeerFlow
+  SSE/chat UI)增量渲染。八类事件：intent → rewrite(仅首轮，透出改写载荷,
+  检索因此改走 `retrieve_round_with_rewrite`) → retrieved(每轮) → reflect →
+  abstain → answer_chunk(逐 token) → done(完整结果) | error(终止)。与
+  qa_agentic 的结构差异是分工不是偷工：无 trace_id/metrics/cache/wiki/
+  history(前端要过程可见而非审计账本)；错误路径 yield error 事件而非降级
+  响应；abstain 拒答文案也作为 answer_chunk 发出(前端渲染路径统一)。
+  **流式边界定夺(llm 课记账兑现)**：`_stream_chat` 是全仓唯一流式调用，直接
+  `get_client().create(stream=True)` 逐 `delta.content` yield，不下沉进
+  llm.py 公共 API——主链路保持全同步，与基准同构。两处确认偏离：a) 系统/
+  用户模板、no-chunks 文案、拒答文案 zh/en 路由(qa_agentic 同款先例，weak
+  hint 调 `weak_evidence_hint(language)`)；b) `_stream_chat` 补
+  `llm.extra_body` 透传——基准漏配：llm 课的透传只盖非流式 chat()，思考型
+  模型流式默认 enable_thinking=true 会先吐 reasoning_content delta，基准只认
+  delta.content，思考 token 被静默丢弃但照常计费；透传后配置可显式关闭，
+  空表缺省时调用形参与基准逐键一致。照抄记账：`max_tokens=600`(与
+  qa_agentic 的 1024 不一致系基准原样，流式面向前端短答案)；
+  `temperature=temperatures.stream`。
+- **`qa_stream.py` 真实验收证据（2026-08-05，助手实跑，Demo 约 7 次 + 真实
+  测试约 4 次 LLM 调用）**：`scripts/demo_qa_stream.py` exit 0——**按用户
+  要求实现 CLI 事件流渲染器**：intent/rewrite/retrieved/reflect/abstain 逐
+  事件一行(rewrite 现场展示 HyDE 多查询与中英混出关键词)，answer_chunk 逐
+  token 打字机效果实时打出且**完整答案不截断**，done 后打印 citations/
+  suspicious/paper_ids 明细。英文问：factual、confident(0.9904)、**26 个流式
+  片段**、citations=2；中文问：reasoning、reflect sufficient(0.88) 停轮、
+  confident(0.9936)、**43 个流式片段**、中文全答案、citations=2；域外"上海
+  明天的天气"：no_evidence(0.0000)、**流式 LLM 调用计数为 0**、中文拒答文案
+  经单个 answer_chunk 流出——流式链路上双硬不变量同样闭环。
+  `tests/test_qa_stream_real.py` 2 passed(数据注入+真实流式 Qwen：强证据
+  answer_chunk>1 真流式+引用纪律；噪声 abstain 短路零调用)。边界测试
+  17 passed；全量纯逻辑 605 passed；Ruff 干净；测试与 Demo 均在 `env -u`
+  干净 shell 复跑通过。数据隔离在 `demo-qa-stream-data/`。**P7 RAG/QA 层十课
+  全部完成收口**(qa_cache/history/research_memory 视需要排后，async_api 归
+  网关阶段)。
 
 ## 已关闭/已诊断问题的细节
 

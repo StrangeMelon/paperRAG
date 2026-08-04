@@ -19,9 +19,12 @@
   纯函数验收通过，已提交 `170c12d`；真实链路覆盖已随 qa_simple 课 Demo 兑现）。
   第八课 `rag/qa_simple.py` ✅（2026-08-05 真实链路验收通过，已提交 `d52f466`）。
   第九课 `rag/qa_agentic.py` ✅（2026-08-05 真实链路验收通过，含前置
-  `observability/` 包一并重建，**功能提交待用户执行，建议拆两笔**）。下一课
-  `rag/qa_stream.py`（流式 QA——P7 收官课，SSE 事件序列 + 基准唯一流式
-  `_stream_chat`；llm 课遗留的"流式边界推迟到 qa_stream 课再定"在此兑现）。
+  `observability/` 包，已提交 `cfe67fd` + `9175749`）。第十课
+  `rag/qa_stream.py` ✅（2026-08-05 真实流式验收通过，**功能提交待用户执行**）。
+  **P7 十课全部完成，RAG/QA 层收口**。下一课（建议）：`scripts/ask.py`
+  CLI 问答入口（闭合 CLAUDE.md 核心三步 init_store → ingest_one → ask 的
+  最后一步，小课）；备选：P7 卫星模块（qa_cache/history/research_memory）、
+  评测层（golden set + gates）、Discovery 扩展——开题前由用户定夺。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -47,8 +50,9 @@
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
   `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
   intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
-  citation_check ✅ → qa_simple ✅ → qa_agentic ✅ → qa_stream（下一课, P7
-  收官）**。
+  citation_check ✅ → qa_simple ✅ → qa_agentic ✅ → qa_stream ✅——P7 十课
+  全部完成收口**（qa_cache/history/research_memory 视需要排后；async_api 归入
+  网关阶段）。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
     `llm.extra_body` 透传**（Qwen 思考型模型非流式必须 `enable_thinking: false`
@@ -205,6 +209,26 @@
     Prometheus 指标节选打印)、`tests/test_qa_agentic_real.py` 2 passed(数据
     注入+真实 intent/reflect/作答)；测试与 Demo 均在 `env -u` 干净 shell
     复跑通过。
+  - `rag/qa_stream.py` ✅（2026-08-05 真实流式验收通过，**功能提交待用户
+    执行**，建议清单：`src/paper_rag/rag/qa_stream.py`、
+    `tests/test_qa_stream.py`、`tests/test_qa_stream_real.py`、
+    `scripts/demo_qa_stream.py`，message
+    `feat(rag): 流式 QA 事件协议与 CLI 渲染验收`）：八类事件生成器
+    (intent/rewrite/retrieved/reflect/abstain/answer_chunk/done/error)，
+    检索走 `retrieve_round_with_rewrite` 透出改写载荷，错误路径 yield error，
+    abstain 拒答文案也走 answer_chunk(前端渲染统一)。**流式边界定夺(llm 课
+    记账兑现)**：流式只在 `_stream_chat` 一处，不下沉 llm.py 公共 API。两处
+    确认偏离：a) prompt/文案 zh/en 路由(qa_agentic 同款 + weak_evidence_hint
+    伏笔)；b) `_stream_chat` 补 `llm.extra_body` 透传(基准漏配——思考型模型
+    流式默认吐 reasoning_content，基准只认 delta.content 静默烧钱；空表缺省
+    逐参一致)。照抄记账：max_tokens=600、无 trace/metrics/钩子(轻装分工)。
+    证据：边界测试 17 passed、全量纯逻辑 605 passed、Ruff 干净、
+    `scripts/demo_qa_stream.py` exit 0(**CLI 事件流渲染器按用户要求逐 token
+    打字机效果 + 完整答案不截断**：英文 26 个流式片段/citations=2、中文 43 个
+    片段/中文全答案、域外 abstain 短路流式 LLM 零调用且拒答文案经
+    answer_chunk 流出；rewrite 事件现场展示 HyDE 多查询)、
+    `tests/test_qa_stream_real.py` 2 passed(真实流式)；测试与 Demo 均在
+    `env -u` 干净 shell 复跑通过。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，

@@ -32,12 +32,17 @@
   标点巧合切出独立 run 可命中，ADR 已按实测改写）、自愈回填、GMB 精确命中、
   porter 召回、中文 bigram 检索、reindex 111 行，用户实跑 exit 0。已记账
   边界：bigram 索引无 unigram，原地 UPDATE 不触发行数自愈）。
-- **唯一下一步**：P6 第五课 `retrieve/rerank.py`（BGE cross-encoder 重排，检索层
-  最后的质量闸门）。预检查：`reranker` 配置块与 `_Reranker` 模型在配置课已就位
-  （`BAAI/bge-reranker-v2-m3`，多语种，zh 适配点预计为零、真实验收须实证）；
-  **模型未缓存**（`data/index/models` 只有 bge-m3），真实 Demo 前需用户预下载
-  约 2.3G 权重。后续课次：`format.py`/`pipeline.py`（P6 收尾，含中文长查询
-  短语边界的修复决策）。
+- **唯一下一步**：P6 收尾课 `retrieve/format.py` + `retrieve/pipeline.py`（组合
+  入口），开题决策点：a) `pipeline.py` 默认依赖 `rag.query_rewrite`（P7 才重建），
+  过渡期回退方案需确认；b) 中文长查询短语边界修复方案（hybrid 课记账）；
+  c) `format_evidence` 英文信封是否按语言路由。
+- **P6 已完成（rerank 课）**：`rerank.py` ✅（`4140338`，2026-08-05。与基准逐
+  语义对齐：懒加载单例 + `_LOAD_FAILED` 闩锁、四层降级回退 RRF 原序、单对裸
+  float 兼容、normalize sigmoid 分数；唯一偏离：拷贝候选不改写调用方（与
+  hybrid 不可变约定一致）。9 边界测试；Demo 真实加载 bge-reranker-v2-m3：
+  英文精排 16→8 纠偏 7/8、中文对照 gap 0.917、跨语言对英文相关块 0.907 胜
+  中文无关块 0.000（不被语言相同迷惑；元数据卡片因摘要相关被弃作无关对照）、
+  不可变契约、enabled=false 直通。用户实跑 exit 0）。
 - **P6 已完成课次（近两课）**：`hybrid.py` ✅（`3ecc6c8`，2026-08-04。RRF 名次
   融合与基准逐项对齐；偏离一处：rrf_fuse 拷贝条目不改写调用方 dict。
   `fts5.sync_paper` 接入 ingest index 步（非致命，ADR-0001 规模修订待办关闭，

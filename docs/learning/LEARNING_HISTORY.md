@@ -679,6 +679,33 @@
   污染答案上的端到端切片），全量纯逻辑 549 passed，Ruff 干净，`env -u` 干净
   shell 复跑通过。真实链路覆盖按确认并入 qa_simple 课 Demo（先例：contextual
   并入 builder 课），本课不造人为拼装答案的伪真实 Demo。
+- **`rag/qa_simple.py`（P7 第八课，2026-08-05）**：单轮 QA——P7 前七课组件的
+  第一次合龙。基准 phase-1 产物但现役：`scripts/ask.py` CLI 入口、评测
+  ablation 的 dense-only 最小基线、citation_check 三段管道的最简单完整消费方。
+  结构：dense-only `retrieve` → 空检索短路 → `format_evidence` → system+user
+  prompt → `chat()` 全默认参数 → validate → detect → count>0 才 strip → 四键
+  输出（answer/citations/chunks/suspicious_citations，无 trace）。`_SYSTEM` 是
+  硬不变量的 **prompt 端**（让模型少犯），citation_check 是执行端（犯了也漏
+  不出去），两端合起来才是完整不变量。两处确认偏离：a) 系统与用户模板 zh/en
+  双语路由（复用 `_query_language`；中文版明确禁止全角引用形态 【1】/全角
+  括号作者-年份——上一课刚教会执行端认这些形态，prompt 端同步收紧）；b) 无
+  证据短路文案按语言路由（"(未检索到证据)"/基准英文原文）。照抄并记账：
+  dense-only 检索**不升级**为 retrieve_round（设计决策——qa_simple 的存在
+  意义就是最小对照组，ablation 需要该基线，完整管道是 qa_agentic 的事）。
+- **`qa_simple.py` 真实验收证据（2026-08-05，助手实跑，Demo 3 次 + 真实测试
+  2 次 LLM 调用）**：`scripts/demo_qa_simple.py` exit 0——数据与 abstain/
+  reflect Demo 同源，真实 BGE-M3 + embedded Qdrant + 真实 `qwen3.8-max`。
+  英文问 Graph-Mamba：citations=4、全部 ⊆ 检索集、strip 后 detect 复检
+  count=0、答案带 [chunk:] 令牌；中文问区块链：citations=6、同纪律、中文
+  prompt 路由下答案为中文；**域外行为观察（教学对照）**：问"上海明天的天气"
+  检索仍返回 6 块噪声，模型诚实声明"证据不足以回答"**却仍引用了 3 个噪声块**
+  ——prompt 端的"不足要明说"守住了内容，但守不住引用行为，这正是 qa_agentic
+  需要 abstain 在 LLM 前砍掉调用的实证；citation_check 课确认的"真实链路覆盖
+  并入 qa_simple Demo"随本 Demo 兑现。`tests/test_qa_simple_real.py` 2 passed
+  （按开题确认的数据注入打 LLM 边界：手工真实形态 chunks + 真实 Qwen，断言
+  只引给定 id、无可疑形态残留、中文答案中文）。边界测试 12 passed；全量纯
+  逻辑 561 passed；Ruff 干净；测试与 Demo 均在 `env -u` 干净 shell 复跑通过。
+  数据隔离在 `demo-qa-simple-data/`。
 
 ## 已关闭/已诊断问题的细节
 

@@ -16,9 +16,11 @@
   第五课 `rag/abstain.py` ✅（2026-08-05 真实链路验收通过，已提交 `395cf7f`，
   ADR-0002 亦已补提交 `c8d109a`）。第六课 `rag/reflect.py` ✅（2026-08-05 真实
   验收通过，已提交 `2a32494`）。第七课 `rag/citation_check.py` ✅（2026-08-05
-  纯函数验收通过，**功能提交待用户执行**；真实链路覆盖按确认并入 qa_simple 课
-  Demo）。下一课 `rag/qa_simple.py`（单轮同步 QA——三段引用管道 + 证据 prompt
-  的第一个完整消费方）。
+  纯函数验收通过，已提交 `170c12d`；真实链路覆盖已随 qa_simple 课 Demo 兑现）。
+  第八课 `rag/qa_simple.py` ✅（2026-08-05 真实链路验收通过，**功能提交待用户
+  执行**）。下一课 `rag/qa_agentic.py`（agentic QA 主编排——P7 全部组件的
+  总合龙：intent → rewrite → 多轮检索循环(reflect) → evidence_select →
+  abstain → LLM → citation_check + 全程 trace）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -44,7 +46,7 @@
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
   `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
   intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
-  citation_check ✅ → qa_simple（下一课）** → qa_agentic → qa_stream。
+  citation_check ✅ → qa_simple ✅ → qa_agentic（下一课）** → qa_stream。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
     `llm.extra_body` 透传**（Qwen 思考型模型非流式必须 `enable_thinking: false`
@@ -158,6 +160,24 @@
     22 passed（含三段管道端到端切片）、全量纯逻辑 549 passed、Ruff 干净、
     `env -u` 干净 shell 复跑通过。真实链路覆盖并入 qa_simple 课 Demo
     （先例：contextual 并入 builder）。
+  - `rag/qa_simple.py` ✅（2026-08-05 真实链路验收通过，**功能提交待用户
+    执行**，建议清单：`src/paper_rag/rag/qa_simple.py`、
+    `tests/test_qa_simple.py`、`tests/test_qa_simple_real.py`、
+    `scripts/demo_qa_simple.py`，message
+    `feat(rag): 单轮 QA 与双语引用纪律合龙`）：dense-only 检索 → zh/en 双语
+    prompt → chat 全默认参 → citation_check 三段管道 → 四键输出（无 trace）。
+    现役价值：`scripts/ask.py` CLI 入口、评测 ablation 最小基线、citation_check
+    的第一个完整消费方。两处确认偏离：a) `_SYSTEM`/user 模板 zh/en 路由（中文
+    版明确禁止全角引用形态，与 citation_check 中文扩展同步收紧）；b) 无证据
+    短路文案按语言路由（"(未检索到证据)"）。照抄记账：dense-only 不升级
+    retrieve_round（最小对照组的存在意义）。证据：边界测试 12 passed、全量
+    纯逻辑 561 passed、Ruff 干净、`scripts/demo_qa_simple.py` exit 0（真实
+    链路硬不变量端到端：英文 citations=4/suspicious=0、中文 citations=6/
+    suspicious=0 且中文答案、域外行为观察——模型声明证据不足**但仍引用了
+    3 个噪声块**，正是 qa_agentic 需要 abstain 闸门的实证对照）、
+    `tests/test_qa_simple_real.py` 2 passed（数据注入打 LLM 边界）；测试与
+    Demo 均在 `env -u` 干净 shell 复跑通过。citation_check 真实链路覆盖随本
+    Demo 兑现。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，
@@ -388,7 +408,7 @@ P6 检索层已收口：dense ✅ → fts5 ✅ → sparse_bm25 ✅ → hybrid(RR
 rerank ✅ → format/pipeline ✅。P7（RAG/QA 层）已开题，**顺序已按基准依赖核对
 修正**（原预排的 query_rewrite → llm 与实际依赖相反）：llm ✅ → query_rewrite ✅ →
 intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
-citation_check ✅ → qa_simple → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
+citation_check ✅ → qa_simple ✅ → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
 视需要排后；async_api 归入网关阶段）。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic

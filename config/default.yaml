@@ -78,6 +78,8 @@ llm:
   api_key: $OPENAI_API_KEY
   chat_model: $CHAT_MODEL
   small_model: $SMALL_MODEL
+  extra_body: {}              # vendor params passed through to chat.completions.create;
+                              # Qwen thinking models need {enable_thinking: false} for non-streaming
 
 vision:
   enabled: false

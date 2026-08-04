@@ -94,10 +94,11 @@ class _Abstain(BaseModel):
     no-evidence cases — the typical fpr=0 operating point on the M6 33-question
     set).
     """
+
     enabled: bool = True
-    threshold_low: float = 0.20      # < low      -> no_evidence (LLM skipped)
-    threshold_high: float = 0.40     # >= high    -> confident (normal flow)
-    min_chunks: int = 3              # avg top-N chunk scores for decision
+    threshold_low: float = 0.20  # < low      -> no_evidence (LLM skipped)
+    threshold_high: float = 0.40  # >= high    -> confident (normal flow)
+    min_chunks: int = 3  # avg top-N chunk scores for decision
     no_evidence_message: str = (
         "未在已索引文献中找到与该问题相关的内容。请确认问题与已入库的论文主题"
         "相符，或考虑通过 paper_ingest_tool 扩充语料库。"  # noqa: RUF001
@@ -121,12 +122,13 @@ class _LlmTemperatures(BaseModel):
     single config tweak rolls out to every call site (qa_agentic, qa_stream,
     deliver/survey, deliver/latex_bib, wiki/flow, query_rewrite).
     """
-    answer: float = 0.2          # qa_agentic main answer
-    stream: float = 0.2          # qa_stream main answer
-    rewrite: float = 0.3         # query_rewrite — wider for paraphrase diversity
-    wiki: float = 0.2            # wiki concept create / patch
-    survey: float = 0.3          # deliver/survey_md narrative
-    latex_bib: float = 0.3       # deliver/latex_bib narrative
+
+    answer: float = 0.2  # qa_agentic main answer
+    stream: float = 0.2  # qa_stream main answer
+    rewrite: float = 0.3  # query_rewrite — wider for paraphrase diversity
+    wiki: float = 0.2  # wiki concept create / patch
+    survey: float = 0.3  # deliver/survey_md narrative
+    latex_bib: float = 0.3  # deliver/latex_bib narrative
 
 
 class _Llm(BaseModel):
@@ -136,6 +138,9 @@ class _Llm(BaseModel):
     chat_model: str | None = None
     small_model: str | None = None
     temperatures: _LlmTemperatures = Field(default_factory=_LlmTemperatures)
+    # OpenAI 兼容供应商的私有参数, 非空时由 rag/llm.py 透传给 chat.completions.create。
+    # Qwen(DashScope)思考型模型非流式调用必须 {enable_thinking: false}, 否则 400。
+    extra_body: dict[str, Any] = Field(default_factory=dict)
 
 
 class _Vision(BaseModel):

@@ -20,8 +20,8 @@
   第八课 `rag/qa_simple.py` ✅（2026-08-05 真实链路验收通过，已提交 `d52f466`）。
   第九课 `rag/qa_agentic.py` ✅（2026-08-05 真实链路验收通过，含前置
   `observability/` 包，已提交 `cfe67fd` + `9175749`）。第十课
-  `rag/qa_stream.py` ✅（2026-08-05 真实流式验收通过，**功能提交待用户执行**）。
-  **P7 十课全部完成，RAG/QA 层收口**。下一课（建议）：`scripts/ask.py`
+  `rag/qa_stream.py` ✅（2026-08-05 真实流式验收通过，已提交 `e976dc2`）。
+  **P7 十课全部完成并全部入库，RAG/QA 层收口**。下一课（建议）：`scripts/ask.py`
   CLI 问答入口（闭合 CLAUDE.md 核心三步 init_store → ingest_one → ask 的
   最后一步，小课）；备选：P7 卫星模块（qa_cache/history/research_memory）、
   评测层（golden set + gates）、Discovery 扩展——开题前由用户定夺。
@@ -209,11 +209,8 @@
     Prometheus 指标节选打印)、`tests/test_qa_agentic_real.py` 2 passed(数据
     注入+真实 intent/reflect/作答)；测试与 Demo 均在 `env -u` 干净 shell
     复跑通过。
-  - `rag/qa_stream.py` ✅（2026-08-05 真实流式验收通过，**功能提交待用户
-    执行**，建议清单：`src/paper_rag/rag/qa_stream.py`、
-    `tests/test_qa_stream.py`、`tests/test_qa_stream_real.py`、
-    `scripts/demo_qa_stream.py`，message
-    `feat(rag): 流式 QA 事件协议与 CLI 渲染验收`）：八类事件生成器
+  - `rag/qa_stream.py` ✅（2026-08-05 真实流式验收通过，**已提交 `e976dc2`**，
+    4 files：qa_stream、两个测试、demo）：八类事件生成器
     (intent/rewrite/retrieved/reflect/abstain/answer_chunk/done/error)，
     检索走 `retrieve_round_with_rewrite` 透出改写载荷，错误路径 yield error，
     abstain 拒答文案也走 answer_chunk(前端渲染统一)。**流式边界定夺(llm 课

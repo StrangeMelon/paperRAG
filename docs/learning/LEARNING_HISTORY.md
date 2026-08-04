@@ -581,6 +581,42 @@
   修复在真实数据上实证，选中块 section=摘要 亦吃到中文提示加分）；混合问单篇 ≤2；
   同一窗口两遍选择选集与全部候选得分逐项一致（确定性）。边界测试 18 passed，
   全量纯逻辑 481 passed，Ruff 干净。数据隔离在 `demo-evidence-select-data/`。
+- **`rag/abstain.py`（P7 第五课，2026-08-05）**：三路证据充分性裁决——硬不变量
+  "无证据宁拒答"的执行者，纯函数无 LLM。检索永远返回"最相似"top-k（哪怕域外
+  问题），abstain 在 LLM 调用前按 top-`min_chunks` 归一化证据分裁四态：
+  no_chunks / no_evidence（跳过 LLM 返回拒答文案）/ weak_evidence（LLM 照常但
+  prompt 注入不足提示）/ confident。核心设计：分数字段优先级
+  rerank > dense > score > bm25 > rrf，**首个可用字段服务全列表不混用**；分字段
+  归一化进 [0,1] 带（rerank 天然 0-1、dense 裁剪、RRF ×15、BM25 sigmoid
+  center=8）使阈值语义在 reranker 开/关时稳定；**信号质量分级 + fail open**——
+  低质字段（BM25/RRF 排名型信号区分不了"无关块排前"与"相关块排前"）与字段
+  全缺一律放行 confident，降级态经 `signal_quality` 透出。配置 `rag.abstain`
+  （0.21/0.48/3 + 中文拒答文案）早前配置课已就位，本课零配置改动；YAML 校准值
+  与签名缺省 0.20/0.40 不同，运行时 YAML 赢。两处确认偏离：a) 新增
+  `weak_evidence_hint(language)` zh/en 路由 + `WEAK_EVIDENCE_HINT_ZH` 中文文案
+  （基准硬编码英文提示，中文 prompt 风格割裂；en/None/未知语言仍走基准英文
+  常量）；b) `no_chunks` 早退分支补 `signal_quality="no_chunks"`（基准漏键，
+  四态 schema 拉平免去 trace 消费方缺键防御）。照抄并记账：BM25 sigmoid
+  center=8 按英文语料校准、中文 FTS5 bigram 分布不同——但低质字段 fail open
+  使该常数从不影响裁决只影响展示数字；阈值 0.21/0.48 系基准英文 33 题集校准，
+  中英混合语料未重校（评测阶段可复刻 calibrate_abstain 重校）；空表早退先于
+  enabled 检查（disabled + [] 仍返回 no_chunks，以基准代码行为为准）；
+  `no_evidence_message` 基准本就中文，英文侧路由推迟到 qa_agentic 课定夺。
+- **`abstain.py` 真实链路验收证据（2026-08-05，助手实跑，无 LLM 消耗）**：
+  `scripts/demo_abstain.py` exit 0——数据与 evidence_select Demo 同源（英文
+  Graph-Mamba 库副本 + 中文期刊 62 块），真实 BGE-M3 + embedded Qdrant + FTS5 +
+  真实 reranker，阈值取 YAML 校准值非签名缺省。域内英文问证据分 **0.9903**、
+  中文问 **0.9899** → 双双 confident；域外问"上海明天的天气怎么样"检索照样
+  返回 8 块噪声但 rerank 证据分塌陷到 **0.0000** → **no_evidence（LLM 将被
+  跳过）**，教科书式对照；同批域外块剥掉高质字段后落 score_bm25（0.1265）→
+  confident + low_degraded、全剥 → confident + missing（fail open 实证）；
+  空列表 no_chunks 带 signal_quality、enabled=False 逃生门、hint 路由全过。
+  边界测试 31 passed；全量 `uv run python -m pytest -q` 525 passed + 2 failed
+  （仅 `test_mineru_bilingual_real` 缺 `PAPER_RAG_REAL_ENGLISH_PDF` 环境变量的
+  既有按约定"响亮失败"，与本课无关；该轮顺带跑过了 llm/rewrite/intent 真实
+  测试均通过，消耗少量 LLM 调用）；排除 `*_real*` 后 502 passed；Ruff 干净。
+  测试与 Demo 均在 `env -u` 剥离变量的干净 shell 复跑通过。数据隔离在
+  `demo-abstain-data/`。
 
 ## 已关闭/已诊断问题的细节
 

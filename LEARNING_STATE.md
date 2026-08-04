@@ -13,7 +13,8 @@
   **注意：`83b9d30` 漏掉了 ADR-0002**，`docs/adrs/0002-evidence-select-cjk-overlap.md`
   仍未跟踪，待用户补独立提交（建议
   `git commit -m "docs(adr): 查询侧 CJK bigram 词面匹配口径"`）。
-  下一课 `rag/abstain.py`（纯函数课，硬不变量"无证据宁拒答"的执行者）。
+  第五课 `rag/abstain.py` ✅（2026-08-05 真实链路验收通过，**功能提交待用户执行**）。
+  下一课 `rag/reflect.py`（反思式多轮检索循环）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -38,7 +39,7 @@
 - **P7 RAG/QA 层（进行中，2026-08-05 开题）**：依赖核对结论——`llm.py` 是 rag 层
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
   `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
-  intent_classifier ✅ → evidence_select ✅ → abstain（下一课）** → reflect →
+  intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect（下一课）** →
   citation_check → qa_simple → qa_agentic → qa_stream。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
@@ -96,6 +97,24 @@
     中文 overlap 0.650 > 0 修复实证、单篇限额、两遍逐项一致）。
     决策已成文 `docs/adrs/0002-evidence-select-cjk-overlap.md`（**待补提交**，
     建议独立 `docs(adr)` 提交，勿夹带 `arxiv_source.py` 遗留 diff）。
+  - `rag/abstain.py` ✅（2026-08-05 真实链路验收通过，**功能提交待用户执行**，
+    建议清单：`src/paper_rag/rag/abstain.py`、`tests/test_abstain.py`、
+    `scripts/demo_abstain.py`，message
+    `feat(rag): 三路证据充分性裁决与 fail open 信号分级`）：纯函数无 LLM，
+    在 LLM 调用前按 top-`min_chunks` 归一化证据分裁四态（no_chunks /
+    no_evidence 跳过 LLM / weak_evidence 注入提示 / confident）。字段优先级
+    rerank > dense > score > bm25 > rrf、首个可用字段服务全列表；低质字段
+    （BM25/RRF）与字段全缺一律 **fail open** 放行并经 `signal_quality` 透出
+    降级态。配置 `rag.abstain` 早已就位，本课零配置改动。两处确认偏离：
+    a) `weak_evidence_hint(language)` zh/en 路由 + 中文 hint 文案；
+    b) `no_chunks` 分支补 `signal_quality="no_chunks"` 拉平四态 schema
+    （基准漏键）。已记账：BM25 sigmoid center=8 系英文校准但不影响裁决；
+    阈值 0.21/0.48 未按中英混合语料重校（评测阶段再定）；
+    `no_evidence_message` 英文侧路由推迟到 qa_agentic 课。证据：边界测试
+    31 passed、排除 `*_real*` 全量 502 passed、Ruff 干净、
+    `scripts/demo_abstain.py` exit 0（真实检索链：域内中英 0.99 → confident，
+    域外"上海天气"8 块噪声证据分 0.0000 → no_evidence，剥高质字段 fail open
+    实证），测试与 Demo 均在 `env -u` 干净 shell 复跑通过。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，
@@ -324,9 +343,9 @@ multimodal chunker，7 文件全部 ✅）均已完成，提交清单见归档�
 已完成：`embed/bge_m3.py` ✅ → `store/ingest_pipeline.py` ✅（`5201259`）。
 P6 检索层已收口：dense ✅ → fts5 ✅ → sparse_bm25 ✅ → hybrid(RRF) ✅ →
 rerank ✅ → format/pipeline ✅。P7（RAG/QA 层）已开题，**顺序已按基准依赖核对
-修正**（原预排的 query_rewrite → llm 与实际依赖相反）：llm ✅ → query_rewrite →
-intent_classifier → evidence_select → abstain → reflect → citation_check →
-qa_simple → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
+修正**（原预排的 query_rewrite → llm 与实际依赖相反）：llm ✅ → query_rewrite ✅ →
+intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect →
+citation_check → qa_simple → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
 视需要排后；async_api 归入网关阶段）。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic

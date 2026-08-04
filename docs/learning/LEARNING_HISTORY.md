@@ -655,6 +655,30 @@
   类断言一律钉稳定不变量，精确断言配受控输入**。边界测试 25 passed；排除
   `*_real*` 全量 527 passed；Ruff 干净；边界/真实测试与 Demo 均在 `env -u`
   干净 shell 复跑通过。数据隔离在 `demo-reflect-data/`。
+- **`rag/citation_check.py`（P7 第七课，2026-08-05，纯函数课零 LLM 消耗）**：
+  第二条硬不变量"答案只以 `[chunk:<id>]` 引用已检索块"的执行层。LLM 的三种
+  背叛方式各由一个纯函数看守：编造 chunk id（形式合规的内容幻觉）由
+  `validate_citations` 白名单校验删除并收合法 id（保序去重）；预训练学术惯性
+  `[1]` 与 `(Vaswani et al., 2017)` 由 `detect_suspicious_citations` 报告
+  （`{"numeric", "author_year", "count"}`）；`strip_suspicious_citation_forms`
+  剥形态并收拾标点前空格。消费方 qa_simple/qa_agentic/qa_stream 三条路径同款
+  固定顺序：validate → detect → count>0 才 strip。四处确认偏离（中文答案三
+  盲区 + 死代码）：a) 数字引用增全角 `【1】`（Qwen 中文答案高频形态）；
+  b) 新增 CJK 作者-年份 `(张三等, 2020)`——CJK 姓名 1-4 字 + 可选"等"(=et
+  al.) + 年份，括号/逗号半全角均认，归入既有 author_year 键消费方 schema
+  不变，无年份的 `(见图 2)`/`（详见附录）` 不误报；c) strip 标点收拾字符类
+  扩入全角 `，。；：、`；d) 不抄两处死代码——严格 hex `_CITE_RE`（基准定义后
+  全仓库无人使用，validate 用宽松 `[^\]\s]+` 口径）与 `_NUM_CITE_RE` 上永不
+  生效的 `(?<!chunk:)` lookbehind（纯数字要求已天然排除 `[chunk:...]`，基准
+  注释还把 lookbehind 误写为 lookahead）。照抄并记账的既有边界：区间/合并型
+  `[1-3]`、`[1,2]` 不识别；作者在括号外的 "Vaswani et al. (2017)" 与全角括号
+  包拉丁名不识别；validate 删无效引用留双空格（仅 strip 触发时顺手收拾）。
+  Ruff 处置：全角字符是本模块的业务数据（正则/测试样本），pyproject
+  per-file-ignores 对本模块与其测试豁免 RUF001/2/3（比逐行 34 个 noqa 干净）。
+  证据：边界测试 22 passed（六切片，含 validate→detect→strip 三段管道在混合
+  污染答案上的端到端切片），全量纯逻辑 549 passed，Ruff 干净，`env -u` 干净
+  shell 复跑通过。真实链路覆盖按确认并入 qa_simple 课 Demo（先例：contextual
+  并入 builder 课），本课不造人为拼装答案的伪真实 Demo。
 
 ## 已关闭/已诊断问题的细节
 

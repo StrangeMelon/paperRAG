@@ -15,8 +15,10 @@
   `git commit -m "docs(adr): 查询侧 CJK bigram 词面匹配口径"`）。
   第五课 `rag/abstain.py` ✅（2026-08-05 真实链路验收通过，已提交 `395cf7f`，
   ADR-0002 亦已补提交 `c8d109a`）。第六课 `rag/reflect.py` ✅（2026-08-05 真实
-  验收通过，**功能提交待用户执行**）。下一课 `rag/citation_check.py`
-  （引用校验，硬不变量 `[chunk:<id>]` 格式的执行者）。
+  验收通过，已提交 `2a32494`）。第七课 `rag/citation_check.py` ✅（2026-08-05
+  纯函数验收通过，**功能提交待用户执行**；真实链路覆盖按确认并入 qa_simple 课
+  Demo）。下一课 `rag/qa_simple.py`（单轮同步 QA——三段引用管道 + 证据 prompt
+  的第一个完整消费方）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -42,7 +44,7 @@
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
   `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
   intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
-  citation_check（下一课）** → qa_simple → qa_agentic → qa_stream。
+  citation_check ✅ → qa_simple（下一课）** → qa_agentic → qa_stream。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
     `llm.extra_body` 透传**（Qwen 思考型模型非流式必须 `enable_thinking: false`
@@ -139,6 +141,23 @@
     sufficient 0.88；另一轮实测中文 partial 时 missing/follow_up 均流利中文），
     `tests/test_reflect_real.py` 3 passed；测试与 Demo 均在 `env -u` 干净 shell
     复跑通过。
+  - `rag/citation_check.py` ✅（2026-08-05 纯函数验收通过，**功能提交待用户
+    执行**，建议清单：`src/paper_rag/rag/citation_check.py`、
+    `tests/test_citation_check.py`、`pyproject.toml`（per-file-ignores 两行：
+    全角引用形态是本模块的业务数据，RUF001/2/3 按文件豁免），message
+    `feat(rag): 引用校验与中文引用形态检测`）：硬不变量 `[chunk:<id>]` 的
+    执行层，三纯函数按 validate（删编造 id、valid 保序去重）→ detect（数字/
+    作者-年份可疑形态报告）→ 有可疑才 strip 的固定顺序被 qa 三条路径消费。
+    四处确认偏离：a) 数字引用增全角 `【1】`；b) 新增 CJK 作者-年份
+    `(张三等, 2020)`（姓名 1-4 字 + 可选"等" + 年份，括号/逗号半全角均认，
+    归入既有 author_year 键）；c) strip 标点收拾扩入全角 `，。；：、`；
+    d) 不抄基准死常量 `_CITE_RE`（定义后全仓库未用）与永不生效的
+    `(?<!chunk:)` lookbehind。照抄记账：`[1-3]`/`[1,2]` 区间型、作者在括号外
+    的 "Vaswani et al. (2017)"、全角括号包拉丁名均不识别（基准同款口径）；
+    validate 删无效引用留双空格仅在 strip 触发时被收拾。证据：边界测试
+    22 passed（含三段管道端到端切片）、全量纯逻辑 549 passed、Ruff 干净、
+    `env -u` 干净 shell 复跑通过。真实链路覆盖并入 qa_simple 课 Demo
+    （先例：contextual 并入 builder）。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，
@@ -369,7 +388,7 @@ P6 检索层已收口：dense ✅ → fts5 ✅ → sparse_bm25 ✅ → hybrid(RR
 rerank ✅ → format/pipeline ✅。P7（RAG/QA 层）已开题，**顺序已按基准依赖核对
 修正**（原预排的 query_rewrite → llm 与实际依赖相反）：llm ✅ → query_rewrite ✅ →
 intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
-citation_check → qa_simple → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
+citation_check ✅ → qa_simple → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
 视需要排后；async_api 归入网关阶段）。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic

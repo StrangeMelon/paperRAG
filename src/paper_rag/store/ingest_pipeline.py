@@ -238,7 +238,7 @@ def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
     _step(
         paper_id,
         "index",
-        lambda: _replace_qdrant_chunks(paper_id, chunks, vectors),
+        lambda: _index_chunks(paper_id, chunks, vectors),
     )
     sqlite_store.set_status(paper_id, "indexed")
     sqlite_store.set_status(paper_id, "done")
@@ -259,3 +259,20 @@ def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
 def _replace_qdrant_chunks(paper_id: str, chunks: list[dict], vectors: list[list[float]]) -> int:
     qdrant_store.delete_chunks_for_paper(paper_id)
     return qdrant_store.upsert_chunks(chunks, vectors)
+
+
+def _sync_fts5_nonfatal(paper_id: str) -> None:
+    """FTS5 稀疏索引单篇增量同步(ADR-0001 规模修订: 10^6 chunks 下不能依赖
+    分钟级的全量自愈)。失败不致命——打 warning, search 行数自愈兜底。"""
+    try:
+        from ..retrieve import fts5
+
+        fts5.sync_paper(paper_id)
+    except Exception as e:
+        log.warning(f"fts5 sync skipped (non-fatal): {e}")
+
+
+def _index_chunks(paper_id: str, chunks: list[dict], vectors: list[list[float]]) -> int:
+    n = _replace_qdrant_chunks(paper_id, chunks, vectors)
+    _sync_fts5_nonfatal(paper_id)
+    return n

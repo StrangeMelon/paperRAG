@@ -120,6 +120,10 @@ def _wire(
     names = section_names or ["Introduction", "Method", "Experiments", "Conclusion"]
     monkeypatch.setattr(ip, "sqlite_store", fake_sql)
     monkeypatch.setattr(ip, "qdrant_store", fake_qd)
+    # fts5 增量同步打桩: 记录进 fake_qd.ops, 避免单测触达真实 SQLite 引擎
+    monkeypatch.setattr(
+        ip, "_sync_fts5_nonfatal", lambda pid: fake_qd.ops.append(("fts_sync", pid))
+    )
     monkeypatch.setattr(ip, "parse_pdf", lambda pid, path: (parsed, "mineru"))
     monkeypatch.setattr(ip, "build_chunks", lambda pid, d, title: _sections_chunks(names))
     monkeypatch.setattr(
@@ -199,7 +203,8 @@ def test_happy_path_states_card_vectors_and_replacement(monkeypatch, tmp_path: P
         ["embed", "ok"],
         ["index", "ok"],
     ]
-    assert fake_qd.ops == [("delete", "p1"), ("upsert", 5, 5)]  # 先删后插的替换语义
+    assert fake_qd.ops == [("delete", "p1"), ("upsert", 5, 5), ("fts_sync", "p1")]
+    # 先删后插的替换语义; fts5 增量同步在向量替换之后接线(hybrid 课, ADR-0001 规模修订)
 
 
 def test_zh_language_flows_to_grading_and_card(monkeypatch, tmp_path: Path) -> None:
@@ -268,3 +273,19 @@ def test_empty_build_chunks_fails_before_metadata_card(monkeypatch, tmp_path: Pa
     assert fake_qd.ops == []  # 不得空转到嵌入/索引
     failed = [kw for s, kw in fake_sql.statuses if s == "failed"]
     assert failed and failed[0]["error"].startswith("chunk: empty")
+
+
+def test_sync_fts5_nonfatal_swallows_errors(monkeypatch) -> None:
+    """FTS 同步失败只打 warning, 不让整篇入库 failed(search 行数自愈兜底)。"""
+    from paper_rag.retrieve import fts5
+
+    def _boom(paper_id: str) -> int:
+        raise RuntimeError("fts down")
+
+    monkeypatch.setattr(fts5, "sync_paper", _boom)
+    warnings: list[str] = []
+    monkeypatch.setattr(ip.log, "warning", warnings.append)
+
+    ip._sync_fts5_nonfatal("p1")  # 不应抛出
+
+    assert any("fts5 sync skipped" in w for w in warnings)

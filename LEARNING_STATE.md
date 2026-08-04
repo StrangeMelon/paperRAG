@@ -13,8 +13,10 @@
   **注意：`83b9d30` 漏掉了 ADR-0002**，`docs/adrs/0002-evidence-select-cjk-overlap.md`
   仍未跟踪，待用户补独立提交（建议
   `git commit -m "docs(adr): 查询侧 CJK bigram 词面匹配口径"`）。
-  第五课 `rag/abstain.py` ✅（2026-08-05 真实链路验收通过，**功能提交待用户执行**）。
-  下一课 `rag/reflect.py`（反思式多轮检索循环）。
+  第五课 `rag/abstain.py` ✅（2026-08-05 真实链路验收通过，已提交 `395cf7f`，
+  ADR-0002 亦已补提交 `c8d109a`）。第六课 `rag/reflect.py` ✅（2026-08-05 真实
+  验收通过，**功能提交待用户执行**）。下一课 `rag/citation_check.py`
+  （引用校验，硬不变量 `[chunk:<id>]` 格式的执行者）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -39,8 +41,8 @@
 - **P7 RAG/QA 层（进行中，2026-08-05 开题）**：依赖核对结论——`llm.py` 是 rag 层
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
   `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
-  intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect（下一课）** →
-  citation_check → qa_simple → qa_agentic → qa_stream。
+  intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
+  citation_check（下一课）** → qa_simple → qa_agentic → qa_stream。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
     `llm.extra_body` 透传**（Qwen 思考型模型非流式必须 `enable_thinking: false`
@@ -115,6 +117,28 @@
     `scripts/demo_abstain.py` exit 0（真实检索链：域内中英 0.99 → confident，
     域外"上海天气"8 块噪声证据分 0.0000 → no_evidence，剥高质字段 fail open
     实证），测试与 Demo 均在 `env -u` 干净 shell 复跑通过。
+  - `rag/reflect.py` ✅（2026-08-05 真实验收通过，**功能提交待用户执行**，
+    建议清单：`src/paper_rag/rag/reflect.py`、`tests/test_reflect.py`、
+    `tests/test_reflect_real.py`、`scripts/demo_reflect.py`，message
+    `feat(rag): 反思式循环控制器与输出净化`）：每轮检索后 LLM 判
+    sufficiency 三态 + follow_up 驱动下一轮（消费方 `qa_agentic::_retrieve_loop`
+    /`qa_stream`；最后一轮不调用；异常兜底 sufficient 宁停不空转）。两处确认
+    偏离：a) zh/en 双 prompt 模板路由（复用 `_query_language`；follow_up 不强制
+    双语——回喂 retrieve_round 后 pipeline 内部再过 query_rewrite）；b) **修基准
+    缺陷**——基准 `float(data["score"])` 在 try 外，LLM 回非数值 score 会炸穿
+    QA 请求；重建版输出净化全走安全路径（score 强转失败落 0.5 + [0,1] 裁剪、
+    sufficiency 大小写归一 + 三值域校验域外落 sufficient、missing/follow_up 非
+    串强转空串）。**新经验（写给后续 qa 课）**：DashScope `qwen3.8-max`
+    temperature=0 **跨调用不可复现**，临界证据判定在 sufficient/partial 相邻档
+    摆动——真实 Demo 断言只钉稳定不变量（题内强证据 != insufficient、缺口问题
+    != sufficient、非充分必带 follow_up），受控 `== sufficient` 断言放
+    `test_reflect_real.py` 用手工完备证据承担。证据：边界测试 25 passed、排除
+    `*_real*` 全量 527 passed、Ruff 干净、`scripts/demo_reflect.py` exit 0
+    （真实检索链 + 真实 Qwen 3 次调用：强证据 sufficient 0.90 收敛、ImageNet
+    缺口 insufficient 0.05 且 follow_up 真实驱动第二轮证据池 8→9、中文模板
+    sufficient 0.88；另一轮实测中文 partial 时 missing/follow_up 均流利中文），
+    `tests/test_reflect_real.py` 3 passed；测试与 Demo 均在 `env -u` 干净 shell
+    复跑通过。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，
@@ -344,7 +368,7 @@ multimodal chunker，7 文件全部 ✅）均已完成，提交清单见归档�
 P6 检索层已收口：dense ✅ → fts5 ✅ → sparse_bm25 ✅ → hybrid(RRF) ✅ →
 rerank ✅ → format/pipeline ✅。P7（RAG/QA 层）已开题，**顺序已按基准依赖核对
 修正**（原预排的 query_rewrite → llm 与实际依赖相反）：llm ✅ → query_rewrite ✅ →
-intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect →
+intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
 citation_check → qa_simple → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
 视需要排后；async_api 归入网关阶段）。
 

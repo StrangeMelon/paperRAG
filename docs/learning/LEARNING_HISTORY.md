@@ -617,6 +617,44 @@
   测试均通过，消耗少量 LLM 调用）；排除 `*_real*` 后 502 passed；Ruff 干净。
   测试与 Demo 均在 `env -u` 剥离变量的干净 shell 复跑通过。数据隔离在
   `demo-abstain-data/`。
+- **`rag/reflect.py`（P7 第六课，2026-08-05）**：反思式多轮检索的循环控制器
+  ——把 RAG 变成 Agentic-RAG 的文件。每轮检索后 LLM 回答"证据够吗/缺什么/
+  下轮搜什么"，输出 `{sufficiency, missing, follow_up, score}` 四键；循环语义
+  （`qa_agentic::_retrieve_loop`）：sufficient 停轮、不充分拿 follow_up 作下轮
+  检索查询（reflect 每轮评估**原始问题**，只有检索查询在换）、follow_up 空也停、
+  最后一轮不调用（判定无法再触发下轮，调了白花钱）、各轮块按 chunk_id 汇池。
+  与 abstain 分工：reflect 是循环中段方向盘，abstain 是作答前最终闸门；失败
+  姿态同向（reflect 异常返回 sufficient 宁停不空转）。两处确认偏离：a) zh/en
+  双 prompt 模板路由（复用 `_query_language`；follow_up 不强制双语——回喂
+  retrieve_round 后 pipeline 内部再过 query_rewrite 的中英混出，不重复操心）；
+  b) **修基准真缺陷**：基准 `return {..., "score": float(data.get("score", 0.5))}`
+  在 try/except **之外**，LLM 回合法 JSON 但 score 非数值（如 "high"）时
+  ValueError 炸穿整个 QA 请求——辅助判定打死主链路，违反自身兜底承诺；重建版
+  输出净化全走安全路径：`_safe_score`（强转失败 0.5 + [0,1] 裁剪）、
+  `_norm_sufficiency`（大小写归一 + 三值域校验，域外/非串落 sufficient 与缺键
+  缺省一致）、`_as_str`（missing/follow_up 非串含显式 null 落空串，循环
+  `if r["follow_up"]` 语义不变、trace 无 None）。照抄并记账：6000 字符截断对
+  中文成本不对称（CJK ~1 字 1 token，反思调用略贵但内容量更大，非正确性）；
+  `temperature=0/max_tokens=300` 字面量与 intent 课同口径不配置化；chat() 走
+  默认 chat_model（基准 rag 层从不用 small_model）。
+- **`reflect.py` 真实验收证据（2026-08-05，助手实跑，Demo 每轮 3 次 LLM 调用，
+  调试期共约 3 轮）**：`scripts/demo_reflect.py` exit 0——数据与 abstain Demo
+  同源，真实 BGE-M3 + embedded Qdrant + FTS5 + reranker + 真实 `qwen3.8-max`。
+  通过轮：强证据英文问 sufficient/0.90 收敛停轮；ImageNet 缺口问
+  insufficient/0.05、missing 指名"无 ImageNet 分类数据"、follow_up 真实喂回
+  `retrieve_round` 第二轮，证据池并集 8→9（agentic 循环真实转动）；中文问
+  sufficient/0.88。**过程发现两点**：a) demo 首跑忘加 `.env` 加载（demo 不走
+  conftest），补 `_load_dotenv`（与 intent Demo 同款极简实现）；b) **DashScope
+  `qwen3.8-max` temperature=0 跨调用不可复现**——同一输入英文强证据一轮判
+  sufficient/0.90、另一轮判 partial/0.65，中文亦在 sufficient/partial 摆动
+  （partial 时 missing/follow_up 均为流利中文，反证中文模板与"follow_up 同
+  语言"指令生效）；Demo 断言相应改钉稳定不变量（题内强证据 != insufficient、
+  缺口问题 != sufficient、非充分必带 follow_up 且中文问的 follow_up 含 CJK），
+  受控 `== sufficient` 断言由 `tests/test_reflect_real.py` 用手工完备证据承担
+  （3 passed）——**该经验对后续 qa_agentic/qa_stream/评测课通用：真实 LLM 判定
+  类断言一律钉稳定不变量，精确断言配受控输入**。边界测试 25 passed；排除
+  `*_real*` 全量 527 passed；Ruff 干净；边界/真实测试与 Demo 均在 `env -u`
+  干净 shell 复跑通过。数据隔离在 `demo-reflect-data/`。
 
 ## 已关闭/已诊断问题的细节
 

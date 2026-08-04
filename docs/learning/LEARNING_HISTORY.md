@@ -805,6 +805,18 @@
   数据隔离在 `demo-ask-data/`, 用户可直接
   `PAPER_RAG_CONFIG=demo-ask-data/config.yaml uv run python scripts/ask.py
   "问题" --stream` 亲手体验四种模式。
+- **`ask.py` 用户实跑捉缺口与修复（2026-08-05）**：用户按交付命令直跑
+  `--stream`, 输出 `[rewrite] 1 queries`(恒等改写降级)、`reflect failed`、
+  作答 `chat stream failed: CHAT_MODEL not set`。根因：**CLI 是独立进程入口,
+  没有 conftest 帮忙加载 `.env`**——demo_ask.py 父进程加载 `.env` 后经 env
+  传给子进程, 把这个缺口在验收里掩盖了(与 query_rewrite 课"助手 shell 先
+  export 掩盖 conftest 缺失"同一类教训: **验收环境与用户环境的差异本身就是
+  被测面**)。修复：`ask.py` 启动时 `_load_dotenv`(不覆盖已导出变量, 与
+  conftest/demo 同约定)+2 个专测(加载/引号剥除/不覆盖/缺文件 no-op; 共
+  10 passed, 全量 615)。实证：在 `env -u` 剥离全部 LLM 变量的干净 shell 里
+  复跑用户原命令, 真实流式中文答案(主从多链/六层逻辑架构)+2 引用+exit 0。
+  顺带一个 Ruff 细节：E402 允许 `sys.path.insert(...)` 表达式语句先于
+  import, 但赋值语句(`_REPO_ROOT = ...`)会破坏豁免——常量移到 import 之后。
 
 ## 已关闭/已诊断问题的细节
 

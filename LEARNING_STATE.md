@@ -35,7 +35,12 @@
   进程准备数据后必须 `qdrant_store.close_client()` 再起 CLI 子进程，否则子
   进程 search 静默返回空**。证据：边界测试 8 passed（`scripts.ask` 导入需
   `python -m pytest`，与 init_store 同款约束）、全量纯逻辑 613 passed、Ruff
-  干净、`env -u` 干净 shell 复跑通过。用户可用
+  干净、`env -u` 干净 shell 复跑通过。**用户实跑捉到一个真实缺口并已修复**：
+  CLI 直跑时无人加载 `.env`（demo 父进程加载后传子进程把缺口掩盖了，与
+  query_rewrite 课 conftest 教训同类），rewrite/reflect 全降级、作答直接
+  error；修复为 `ask.py` 启动自加载 `.env`（不覆盖已导出变量）+2 个专测
+  （共 10 passed，全量 615），并在剥离全部 LLM 变量的干净 shell 里复跑用户
+  原命令实证通过（真实流式中文答案 + 2 引用 + exit 0）。用户可用
   `PAPER_RAG_CONFIG=demo-ask-data/config.yaml uv run python scripts/ask.py
   "问题" --stream` 亲手体验。下一课（建议）：P7 卫星模块或评测层——开题前
   由用户定夺。

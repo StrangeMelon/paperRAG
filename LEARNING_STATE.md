@@ -32,13 +32,22 @@
   标点巧合切出独立 run 可命中，ADR 已按实测改写）、自愈回填、GMB 精确命中、
   porter 召回、中文 bigram 检索、reindex 111 行，用户实跑 exit 0。已记账
   边界：bigram 索引无 unigram，原地 UPDATE 不触发行数自愈）。
-- **唯一下一步**：P6 第三课 `retrieve/sparse_bm25.py`（124 行，rank_bm25 后备
-  稀疏后端）。开题预核对结论：基准 `_TOKEN_RE` 对中文按**逐字 unigram**（与
-  fts5 课的 bigram 粒度不一致，ADR-0001 已记账，本课必须表态）；基准
-  `bm25.pkl` **只写不读**（无任何 pickle.load，重启进程必然全量重建，持久化是
-  死代码）；`invalidate()` 全仓无人调用；单篇 ingest 后进程内缓存不失效（仅
-  `scripts/ingest_batch.py` 手动 `build_index(force=True)`）。方案需经用户
-  确认。后续课次：`hybrid.py` → `rerank.py` → `format.py`/`pipeline.py`。
+- **唯一下一步**：P6 第四课 `retrieve/hybrid.py`（RRF 融合 dense + 稀疏，检索层
+  真正的对外入口雏形）。开题时须决策：a) ADR-0001 规模修订列出的
+  `fts5.sync_paper` 接入 ingest 流水线的接线时机（hybrid 课顺手 vs P6 收尾）；
+  b) 稀疏后端选择与回退语义（基准只在**抛异常**时回退 rank_bm25，"合法空结果"
+  不回退——中文查询遇 FTS5 故障静默变纯稠密的问题已在 ADR-0001 记账）。
+  后续课次：`rerank.py` → `format.py`/`pipeline.py`。
+- **P6 已完成课次详情**：`sparse_bm25.py` ✅（`e5ce271`，2026-08-04。中文
+  unigram 统一为 bigram 复用 `segment_cjk`（跨模块一致性测试钉住，关闭
+  ADR-0001 粒度记账）；删只写不读的 pickle；payload 填真实 section/title；
+  行数自愈；**0 分块丢弃**（基准把无词项交集的 0 分块凑满 top_k 返回，纯噪声）；
+  规模护栏 `retrieve.bm25_max_chunks: 200000` 超限拒建+告警（20000 篇 ≈ 10^6
+  chunks 约束的直接产物，rank_bm25 定位改写为小规模后备+评测对照）。15 边界
+  测试含"top 全被噪声占据时先打分后过滤"复现；Demo 双后端对照：中文 top-10
+  重叠、GMB 一致、porter 行为差（词对 prioritizes/prioritization 经真实语料
+  预核对——dependency 词对因语料真含 2 块单数词形被弃用）、护栏与自愈恢复。
+  用户实跑验收通过）。
 - **P5 进度（两课全部完成，P5 收口）**：`embed/bge_m3.py` ✅（`a91a30b`；环境
   同步命令 `uv sync --extra dev --extra embed --extra ingest --extra mineru`，
   **四个 extra 必须齐**，漏 dev 会卸掉 pre-commit/fastapi；BGE-M3 已缓存在
@@ -202,6 +211,11 @@ LEARNING_STATE.md 和 AGENTS.md，再只读检查 Git 状态；不要回退任�
   自成段落，极小 target 下会独立成块（真实 500 目标并入邻块，无影响）。
 
 ## 已确认的约束
+
+- **知识库目标规模 20000 篇（≈10^6 chunks，2026-08-04 用户确认）**：后续每课按
+  此规模审视——rank_bm25 仅作小规模后备 + 评测对照（超限护栏
+  `retrieve.bm25_max_chunks`）；FTS5 增量 `sync_paper` 须接入 ingest（ADR-0001
+  规模修订）；生产 Qdrant 走远程服务模式，embedded 仅 demo。
 
 - 使用与基准仓库相同的 Python 依赖、嵌入/重排模型、Qdrant、Docker 和
   OpenAI-compatible LLM 配置；`uv` 管理环境（不用 Conda）；Python `>=3.10,<3.14`，

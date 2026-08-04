@@ -6,8 +6,8 @@
 
 ## 当前定位
 
-- 当前阶段：P4（采集、解析和切块）**已全部完成**（2026-08-01 切块层收官）；
-  当前课次：P5（嵌入与入库流水线）。
+- 当前阶段：P4（采集、解析和切块）与 P5（嵌入与入库流水线）**已全部完成**
+  （P5 功能提交 `5201259` 已由用户执行，2026-08-04 核验）；当前课次：P6 检索层。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -17,18 +17,18 @@
   `multimodal_chunker.py` ✅（2026-08-01，含 builder 多模态循环/layout 增强/
   vision 钩子接回，`a972bd8`，本课首次按新验收流程由用户实跑测试与 Demo 并
   与预期对比通过，细节见归档）。
-- **唯一下一步**：**先补提交 ingest_pipeline 功能文件**（用户执行，见下），然后进入
-  P6 检索层开题。建议课次顺序（按依赖与体量）：`retrieve/dense.py`（12 行薄封装，
-  qdrant.search + bge 编码）→ `fts5.py`（169 行，SQLite FTS5 稀疏检索）→
-  `sparse_bm25.py`（124 行，BM25 pickle 索引）→ `hybrid.py`（RRF 融合）→
-  `rerank.py`（BGE reranker）→ `format.py`/`pipeline.py`（组合入口）。**中文扩展
-  重点提前预告**：FTS5 默认 unicode61 分词器不切中文词、BM25 若按空格分词对中文
-  同样失效——稀疏检索双课是检索层最大的中文适配点，动手前必须核对基准分词方案。
-- **待用户执行的提交**（ingest_pipeline 课验收已通过 2026-08-02）：
-  ```
-  git add src/paper_rag/store/ingest_pipeline.py src/paper_rag/chunk/builder.py tests/test_ingest_pipeline.py scripts/demo_ingest_pipeline.py
-  # feat(store): 入库流水线整链编排、语言贯通与端到端真实验收
-  ```
+- **P6 检索层进度**：`retrieve/dense.py` ✅（`45c86c0`，2026-08-04。零偏离薄封装
+  + 包入口 `retrieve/__init__.py`；4 个打桩边界测试；真实 Demo
+  `scripts/demo_dense.py` 只读复用 `demo-ingest-pipeline-data/`，验证英文 top-3
+  与入库课逐分吻合、paper_ids/modality 过滤、中文问题跨语言命中同篇英文论文——
+  dense 层中文适配点为零的结论已实证）。
+- **唯一下一步**：P6 第二课 `retrieve/fts5.py`（169 行，SQLite FTS5 稀疏检索，
+  检索层最大中文适配点）。开题前已实证核对基准分词方案：**unicode61 把连续中文
+  整段收为单一 token**（fts5vocab 实查），子串查询 0 命中，基准 docstring 声称的
+  "CJK per-character" 与实际行为不符；且基准 `chunks_fts` 同步触发器懒建、无人调
+  `reindex_all`，先入库后首查会稀疏空结果。中文扩展与同步机制方案需经用户确认后
+  动手。后续课次顺序不变：`sparse_bm25.py` → `hybrid.py` → `rerank.py` →
+  `format.py`/`pipeline.py`。
 - **P5 进度（两课全部完成，P5 收口）**：`embed/bge_m3.py` ✅（`a91a30b`；环境
   同步命令 `uv sync --extra dev --extra embed --extra ingest --extra mineru`，
   **四个 extra 必须齐**，漏 dev 会卸掉 pre-commit/fastapi；BGE-M3 已缓存在

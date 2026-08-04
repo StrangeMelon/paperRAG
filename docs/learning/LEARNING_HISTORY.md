@@ -523,6 +523,39 @@
   对中文天然不触发、无害，照抄保留。`PAPER_RAG_FORCE_LOCAL_REWRITE` 逃生门、
   wiki 钩子（try/except + warning，与 vision 同款）、`_dedupe`、sqlite 别名回查
   全部按基准同构。
+- **`intent_classifier.py` 已确认方案（2026-08-05 用户确认，已实现）**：基准 62 行，
+  职责是"一次 LLM 调用决定后续检索力度"——factual 取少量块一轮（查一个数字）、
+  reasoning 取中等两轮（跨论文比较）、explore 取大量三轮（综述）。基准同构部分：
+  三分类 prompt、`re.search(r"\{.*\}", raw, re.DOTALL)` 抠 JSON、`temperature=0`
+  （分类要确定性不要多样性）、`max_tokens=120`、**永不抛异常**（任何失败落
+  reasoning 中间档——猜错也不会太离谱）。三处确认偏离：a) 基准把
+  `top_k 5/10/15`、`max_iter 1/2/3`、`rrf_k 60` 硬编码在模块级 `_DEFAULTS`，违反
+  CLAUDE.md "永不硬编码可调项" → 新增 `rag.intent` 配置段（三档各自 top_k/
+  max_iter/rrf_k + `enabled` 开关），`enabled: false` 时直接走本地启发式且**零 LLM
+  调用**（省一次往返，也是无 key 环境的逃生门，与上一课
+  `PAPER_RAG_FORCE_LOCAL_REWRITE` 同款思路）；b) 基准 prompt 的三档说明与例子全
+  英文，对中文提问引导力弱 → 复用上一课已验证的 `_query_language()`（直接 import，
+  不重复实现），zh 走中文模板，把"对比/区别/综述/有哪些进展"这些中文信号词写进
+  模板；c) 新增本地信号词启发式取代基准"一律落 reasoning"——中文含"区别/对比/
+  相比/差异"→reasoning，含"有哪些/进展/综述/现状/概览"→explore，含"是多少/定义/
+  是什么"且短→factual，英文侧同理。这让无 key 环境行为合理，并给边界测试一个
+  不依赖 LLM 的确定性断言面。
+- **`intent_classifier.py` 真实验收证据（2026-08-05，助手实跑）**：
+  `scripts/demo_intent_classifier.py` exit 0——真实 Qwen 对中英各三问
+  **6/6 全判对**：英文 `What is the FactScore metric?`→factual、
+  `How do Self-RAG and CRAG differ...`→reasoning、`What are recent advances...`
+  →explore；中文 `FactScore 指标是什么?`→factual、`Self-RAG 和 CRAG 在检索决策上
+  有什么区别?`→reasoning、`检索增强生成近年有哪些研究进展?`→explore（证明中文模板
+  的信号词引导有效）。配置驱动已实证：临时把 explore 档 `top_k` 改为 24，真实调用
+  带出 24 而非硬编码 15；逃生门 `enabled: false` 时 LLM 调用计数 0、本地启发式仍
+  判为 explore。`tests/test_intent_classifier_real.py` 8 passed，边界测试 37 passed，
+  全量纯逻辑 463 passed，Ruff 干净。**本课起验收命令交付前已按上一课教训在
+  `env -u OPENAI_BASE_URL -u OPENAI_API_KEY -u CHAT_MODEL -u SMALL_MODEL` 剥离
+  变量的干净 shell 里复跑 Demo 与真实测试**（均通过，证明 conftest 加载链有效）。
+- **本课一处自查捉到的测试自相矛盾（2026-08-05）**：启发式切片里原本用
+  `检索增强生成近年有哪些研究进展?` 去断言"无信号词时落 reasoning 默认档"，但该问
+  句本身含 explore 信号词"有哪些/进展"，被启发式正确判为 explore 而 RED 失败。是
+  测试写错而非实现错——改用无信号词的中性问句隔离被测行为。
 
 ## 已关闭/已诊断问题的细节
 

@@ -493,6 +493,21 @@
   3 passed（无 mock，缺配置 `pytest.fail` 不 skip）——含真实模型下的双语 keywords
   断言与"逃生门在真实环境下也一次不发"。落地后 pipeline 的 `identity rewrite`
   warning 已实测消失。
+- **`.env` 加载缺陷与 `tests/conftest.py`（2026-08-05，用户报告后修复）**：用户按验收
+  命令直跑 `uv run pytest -s tests/test_query_rewrite_real.py` 报"配置缺失"，用户自行
+  判断"是不是没有 load_env"——诊断正确。根因：`test_llm_real.py` 自带 `_load_dotenv`
+  并在导入时调用，写 `test_query_rewrite_real.py` 时**漏抄**这一步，该文件只读
+  `os.environ` 而无人写入；助手自查时先执行过 `set -a; . ./.env`，恰好掩盖缺陷。
+  **教训：真实验收命令交付前必须在剥离环境变量的干净 shell 里复跑一遍**（用
+  `env -u VAR ...` 而非依赖当前 shell 状态）。修法不是在第二个文件再抄一份加载器，
+  而是新建 `tests/conftest.py`——pytest 自动发现，收集测试前统一
+  `load_dotenv(override=False)`（`python-dotenv>=1.0` 已在 pyproject 声明，另留极简
+  兜底解析防依赖缺失），并删掉 `test_llm_real.py` 里的重复实现，只留一处真相。
+  `override=False` 让已导出变量优先，支持 `CHAT_MODEL=qwen-turbo uv run pytest ...`
+  临时覆盖。验证：剥离四个变量后两个真实文件 5 passed（证明确由 conftest 加载）；
+  纯逻辑 426 passed 不变（conftest 对无配置环境无副作用）；`.env` 临时改名后三个
+  真实用例仍 `Failed: 真实 LLM 配置缺失: ...` 明确失败、0.12s 退出不发网络——
+  验收协议"缺配置不 skip"未被削弱。
 - **`query_rewrite.py` 已确认方案（2026-08-05 用户确认，已实现）**：基准英文隐式
   假设与中文扩展——a) prompt 单一英文模板且要求 lowercase keywords（对中文无
   意义）→ 新增 `_query_language(q)` 按 CJK 码位占比判 `zh/en`（查询侧无

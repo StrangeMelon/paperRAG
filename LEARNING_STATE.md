@@ -7,8 +7,9 @@
 ## 当前定位
 
 - 当前阶段：P1–P6 **已全部完成并收口**；当前阶段 **P7（RAG/QA 层）进行中**，
-  前两课 `rag/llm.py` ✅（`92662d2`）与 `rag/query_rewrite.py` ✅（真实验收通过，
-  功能提交待用户执行）均已完成，下一课 `rag/intent_classifier.py`（待开题）。
+  前两课 `rag/llm.py` ✅（`92662d2`）与 `rag/query_rewrite.py` ✅（`46be7c3`，含
+  `tests/conftest.py` 统一 `.env` 加载）均已完成并提交，下一课
+  `rag/intent_classifier.py`（待开题）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -46,7 +47,7 @@
     一处流式（为 DeerFlow 前端 SSE），其余全非流式；异步是"全同步引擎 + 网关边界
     `anyio.to_thread.run_sync` 包装"。**结论**：非流式为主链路，流式推迟到
     `qa_stream` 课再定，异步推迟到网关阶段独立小课，不提前引入。
-  - `rag/query_rewrite.py` ✅（2026-08-05 真实验收通过，**功能提交待用户执行**）：
+  - `rag/query_rewrite.py` ✅（2026-08-05 真实验收通过，已提交 `46be7c3`）：
     zh/en 双 prompt 模板路由（`_query_language` 按 CJK 码位占比判定）、zh 的
     keywords **中英双语混出**以跨越 BM25 词面断层（真实模型已实证混出中英术语）、
     中文"原始/最早的 X 论文"别名正则（`_original_aliases` 收敛三条正则）、修
@@ -57,11 +58,13 @@
     `test_uses_real_query_rewrite_by_default` + 导入失败降级专测。证据：边界测试
     35 passed、全量纯逻辑 426 passed、Ruff 干净、`scripts/demo_query_rewrite.py`
     exit 0、`tests/test_query_rewrite_real.py` 3 passed。
-    **待用户执行的功能提交**：
-    `git add src/paper_rag/rag/query_rewrite.py tests/test_query_rewrite.py
-    tests/test_query_rewrite_real.py tests/test_retrieve_pipeline.py
-    scripts/demo_query_rewrite.py`；
-    message：`feat(rag): 查询改写与 HyDE 的中文语言路由与双语关键词(P7 第二课)`。
+    **已提交 `46be7c3`**（7 files / +1006：query_rewrite、三个测试、conftest、
+    demo，含 `test_llm_real.py` 删重复加载器）。
+  - **`tests/conftest.py`（本课中途补的横切修复）**：用户直跑真实测试报"配置缺失"，
+    根因是 `test_query_rewrite_real.py` 漏抄 `.env` 加载（助手自查时先 `set -a;
+    . ./.env` 掩盖了缺陷）。改为 conftest 统一 `load_dotenv(override=False)`，所有
+    真实测试自动受益、不必各自复制。**教训已归档：真实验收命令交付前必须在
+    `env -u VAR ...` 剥离变量的干净 shell 里复跑一遍。**
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，

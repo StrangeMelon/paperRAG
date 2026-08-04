@@ -81,6 +81,7 @@ class _Retrieve(BaseModel):
     rerank_top_k: int = 8
     sparse_backend: str = "fts5"
     fts5_cjk_bigram: bool = True
+    bm25_max_chunks: int = 200000
 
 
 class _Abstain(BaseModel):

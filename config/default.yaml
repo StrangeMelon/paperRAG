@@ -51,6 +51,7 @@ retrieve:
   rerank_top_k: 8
   sparse_backend: fts5          # fts5 | rank_bm25
   fts5_cjk_bigram: true         # 中文按相邻二字对(bigram)入索引; false 退回基准原文行为
+  bm25_max_chunks: 200000       # rank_bm25 纯内存后备的规模护栏, 超限拒绝建索引并告警
 
 rag:
   max_inner_iters: 3

@@ -21,14 +21,24 @@
   + 包入口 `retrieve/__init__.py`；4 个打桩边界测试；真实 Demo
   `scripts/demo_dense.py` 只读复用 `demo-ingest-pipeline-data/`，验证英文 top-3
   与入库课逐分吻合、paper_ids/modality 过滤、中文问题跨语言命中同篇英文论文——
-  dense 层中文适配点为零的结论已实证）。
-- **唯一下一步**：P6 第二课 `retrieve/fts5.py`（169 行，SQLite FTS5 稀疏检索，
-  检索层最大中文适配点）。开题前已实证核对基准分词方案：**unicode61 把连续中文
-  整段收为单一 token**（fts5vocab 实查），子串查询 0 命中，基准 docstring 声称的
-  "CJK per-character" 与实际行为不符；且基准 `chunks_fts` 同步触发器懒建、无人调
-  `reindex_all`，先入库后首查会稀疏空结果。中文扩展与同步机制方案需经用户确认后
-  动手。后续课次顺序不变：`sparse_bm25.py` → `hybrid.py` → `rerank.py` →
-  `format.py`/`pipeline.py`。
+  dense 层中文适配点为零的结论已实证）；`retrieve/fts5.py` ✅（`aeec63d`，
+  2026-08-04，**ADR-0001**（docs/adrs/，已 accepted）记录三处结构性偏离：
+  中文 CJK bigram 分词镜像 + JOIN 回原文、补 porter 词干器、去触发器改
+  Python 同步（`reindex_all`/`sync_paper`）+ search 行数自愈。顺手修复基准
+  查询清洗把 `Graph-Mamba` 黏成 `GraphMamba` 的缺陷（改为替空格）；单中文字
+  查询用前缀 `"字"*` 兜底。配置新增 `retrieve.fts5_cjk_bigram`。20 边界测试
+  （真实临时 SQLite）；Demo `scripts/demo_fts5.py` 用真实英文库副本 + 真实
+  中文期刊 62 chunks：基准复现召回 1/26（"0 命中"断言被真实数据修正——仅
+  标点巧合切出独立 run 可命中，ADR 已按实测改写）、自愈回填、GMB 精确命中、
+  porter 召回、中文 bigram 检索、reindex 111 行，用户实跑 exit 0。已记账
+  边界：bigram 索引无 unigram，原地 UPDATE 不触发行数自愈）。
+- **唯一下一步**：P6 第三课 `retrieve/sparse_bm25.py`（124 行，rank_bm25 后备
+  稀疏后端）。开题预核对结论：基准 `_TOKEN_RE` 对中文按**逐字 unigram**（与
+  fts5 课的 bigram 粒度不一致，ADR-0001 已记账，本课必须表态）；基准
+  `bm25.pkl` **只写不读**（无任何 pickle.load，重启进程必然全量重建，持久化是
+  死代码）；`invalidate()` 全仓无人调用；单篇 ingest 后进程内缓存不失效（仅
+  `scripts/ingest_batch.py` 手动 `build_index(force=True)`）。方案需经用户
+  确认。后续课次：`hybrid.py` → `rerank.py` → `format.py`/`pipeline.py`。
 - **P5 进度（两课全部完成，P5 收口）**：`embed/bge_m3.py` ✅（`a91a30b`；环境
   同步命令 `uv sync --extra dev --extra embed --extra ingest --extra mineru`，
   **四个 extra 必须齐**，漏 dev 会卸掉 pre-commit/fastapi；BGE-M3 已缓存在

@@ -105,6 +105,28 @@ class _Abstain(BaseModel):
     )
 
 
+class _IntentTier(BaseModel):
+    """单档意图的检索力度。"""
+
+    top_k: int = Field(default=10, ge=1)
+    max_iter: int = Field(default=2, ge=1)
+    rrf_k: int = Field(default=60, ge=1)
+
+
+class _Intent(BaseModel):
+    """意图分类的三档检索力度。
+
+    基准把 top_k 5/10/15 与 max_iter 1/2/3 硬编码在 `rag/intent_classifier.py`
+    的 `_DEFAULTS` 里; 搬到配置以遵守"不硬编码可调项"。缺省值与基准逐项一致,
+    偏离只搬家不改行为。`enabled: false` 时跳过 LLM 调用直接走本地启发式。
+    """
+
+    enabled: bool = True
+    factual: _IntentTier = Field(default_factory=lambda: _IntentTier(top_k=5, max_iter=1))
+    reasoning: _IntentTier = Field(default_factory=lambda: _IntentTier(top_k=10, max_iter=2))
+    explore: _IntentTier = Field(default_factory=lambda: _IntentTier(top_k=15, max_iter=3))
+
+
 class _Rag(BaseModel):
     max_inner_iters: int = 3
     max_inner_tokens: int = 8000
@@ -112,6 +134,7 @@ class _Rag(BaseModel):
     enable_reflect: bool = True
     qa_cache_enabled: bool = False
     qa_cache_ttl_hours: int = 24
+    intent: _Intent = Field(default_factory=_Intent)
     abstain: _Abstain = Field(default_factory=_Abstain)
 
 

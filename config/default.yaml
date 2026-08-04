@@ -61,7 +61,21 @@ rag:
   enable_reflect: true
   qa_cache_enabled: false       # set true to cache (question, paper_ids) -> answer for 24h
   qa_cache_ttl_hours: 24
-  abstain:                      # ADR-0014 — three-way abstain on weak retrieval evidence
+  intent:                       # 意图三档检索力度(基准硬编码 _DEFAULTS 的配置化)
+    enabled: true               # false: 跳过 LLM 分类调用, 直接走本地信号词启发式
+    factual:                    # 查单个事实: 少取、单轮
+      top_k: 5
+      max_iter: 1
+      rrf_k: 60
+    reasoning:                   # 对比/多方面分析: 中取、两轮(默认档)
+      top_k: 10
+      max_iter: 2
+      rrf_k: 60
+    explore:                     # 综述/全景: 多取、三轮
+      top_k: 15
+      max_iter: 3
+      rrf_k: 60
+  abstain:                    # ADR-0014 — three-way abstain on weak retrieval evidence
     enabled: true
     # Thresholds calibrated 2026-05-21 via scripts/calibrate_abstain.py (offline mode)
     # against tests/eval/qa_set.real.jsonl (33 q / 3 neg). neg_blocked=100% pos_kept=97%.

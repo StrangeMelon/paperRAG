@@ -135,6 +135,9 @@ ignore = [
 "tests/**" = ["B011", "F401"]
 "scripts/**" = ["F401"]
 "src/paper_rag/utils/logger.py" = ["F401"]   # optional loguru import
+# 全角引用形态(【1】/（张三等，2020）)是引用校验的处理对象, 全角字符即业务数据
+"src/paper_rag/rag/citation_check.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_citation_check.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["paper_rag"]

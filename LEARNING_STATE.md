@@ -32,12 +32,22 @@
   标点巧合切出独立 run 可命中，ADR 已按实测改写）、自愈回填、GMB 精确命中、
   porter 召回、中文 bigram 检索、reindex 111 行，用户实跑 exit 0。已记账
   边界：bigram 索引无 unigram，原地 UPDATE 不触发行数自愈）。
-- **唯一下一步**：P6 第四课 `retrieve/hybrid.py`（RRF 融合 dense + 稀疏，检索层
-  真正的对外入口雏形）。开题时须决策：a) ADR-0001 规模修订列出的
-  `fts5.sync_paper` 接入 ingest 流水线的接线时机（hybrid 课顺手 vs P6 收尾）；
-  b) 稀疏后端选择与回退语义（基准只在**抛异常**时回退 rank_bm25，"合法空结果"
-  不回退——中文查询遇 FTS5 故障静默变纯稠密的问题已在 ADR-0001 记账）。
-  后续课次：`rerank.py` → `format.py`/`pipeline.py`。
+- **唯一下一步**：P6 第五课 `retrieve/rerank.py`（BGE cross-encoder 重排，检索层
+  最后的质量闸门）。预检查：`reranker` 配置块与 `_Reranker` 模型在配置课已就位
+  （`BAAI/bge-reranker-v2-m3`，多语种，zh 适配点预计为零、真实验收须实证）；
+  **模型未缓存**（`data/index/models` 只有 bge-m3），真实 Demo 前需用户预下载
+  约 2.3G 权重。后续课次：`format.py`/`pipeline.py`（P6 收尾，含中文长查询
+  短语边界的修复决策）。
+- **P6 已完成课次（近两课）**：`hybrid.py` ✅（`3ecc6c8`，2026-08-04。RRF 名次
+  融合与基准逐项对齐；偏离一处：rrf_fuse 拷贝条目不改写调用方 dict。
+  `fts5.sync_paper` 接入 ingest index 步（非致命，ADR-0001 规模修订待办关闭，
+  测试钉住 delete→upsert→fts_sync 顺序）；回退语义保持"仅异常回退"（根源已修，
+  ADR 补记）。10 边界测试；Demo 真双语双库（中文期刊 62 块首次真实嵌入 Qdrant
+  副本），跨语言改述查询实证两腿失败模式互补（sparse=0/dense 命中/融合不空），
+  注入故障验证 bm25 接管。用户实跑验收通过）。**新记账边界（hybrid 课发现，
+  修复放 pipeline 收尾课经用户确认）**：fts5 查询构造把连续中文串整体当作
+  bigram 短语，句子级中文查询等价于整句子串精确匹配（全有或全无）；QA 上游
+  query rewrite 可缓解，建议按串长阈值拆 OR。
 - **P6 已完成课次详情**：`sparse_bm25.py` ✅（`e5ce271`，2026-08-04。中文
   unigram 统一为 bigram 复用 `segment_cjk`（跨模块一致性测试钉住，关闭
   ADR-0001 粒度记账）；删只写不读的 pickle；payload 填真实 section/title；

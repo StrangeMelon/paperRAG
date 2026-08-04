@@ -377,6 +377,50 @@
   端口转发 + embedded→服务模式一次性拷贝脚本 demo_pipeline_chunks 隔离
   collection）。
 
+## P6 检索层逐课细节（2026-08-04 — 08-05，七文件全部完成）
+
+漏斗全貌：百万 chunks → dense 20 + sparse 20 → RRF 融合 top_k*2 → cross-encoder
+精排 → 论文多样化 top_k → format_evidence 渲染成带引用令牌的证据块。
+
+- **`dense.py`** ✅ `45c86c0`：零偏离薄封装，存在理由是分层边界（查询与文档
+  必须同一编码器同一空间）。文档侧嵌 `context_text`（带标题/章节前缀）、查询
+  侧嵌裸查询的不对称是刻意设计（BGE-M3 对称双塔不需要 query 指令前缀）。
+  4 打桩测试；Demo 只读复用入库课产物，中文问题跨语言命中英文论文，实证
+  dense 层中文适配点为零。
+- **`fts5.py`** ✅ `aeec63d`（ADR-0001，accepted）：三处结构性偏离——CJK
+  bigram 分词镜像表 + JOIN 回原文、补 porter 词干器、去 SQL 触发器改 Python
+  同步 + search 行数自愈。顺手修复基准查询清洗把 `Graph-Mamba` 黏成
+  `GraphMamba`（改为替空格）。**真实数据修正了 ADR 结论**：基准中文召回不是
+  "0 命中"而是 1/26（4%），命中者靠标点两侧巧合切出独立 run；断言改为
+  "召回 <20%"，ADR 按实测改写。20 测试（真实临时 SQLite）。
+- **`sparse_bm25.py`** ✅ `e5ce271`：中文 unigram 统一为 bigram（复用
+  `segment_cjk`，跨模块一致性测试钉住，关闭 ADR-0001 粒度记账）；删只写不读的
+  pickle 死代码；payload 填真实 section/title；**丢弃 0 分块**（基准把无词项
+  交集的块凑满 top_k 返回，纯噪声）；规模护栏 `bm25_max_chunks: 200000`
+  超限拒建 + 告警（20000 篇约束的直接产物，定位改写为小规模后备 + 评测对照）。
+  Demo 双后端对照，porter 行为差用真实语料预核对过的词对
+  （`prioritizes`/`prioritization`；`dependency` 词对因语料真含单数词形被弃）。
+- **`hybrid.py`** ✅ `3ecc6c8`：RRF 只看名次不看分数（cosine 与 BM25 量纲不可
+  加），k=60 钝化让"两条腿都靠前"者胜出；提升 `score_dense` 保留绝对相似度
+  给 abstain 课。偏离一处：拷贝条目不改写调用方 dict。`fts5.sync_paper` 接入
+  ingest index 步（非致命，测试钉住 delete→upsert→fts_sync 顺序，关闭 ADR-0001
+  规模修订待办）。Demo 跨语言改述查询实证两腿失败模式互补（sparse=0 /
+  dense 命中 / 融合不空），注入故障验证 bm25 接管。
+- **`rerank.py`** ✅ `4140338`：bi-encoder 向量在入库时冻结，cross-encoder 让
+  查询与文档逐词交互，精度换算力，只能用在漏斗末端少量候选上。懒加载单例 +
+  `_LOAD_FAILED` 闩锁、四层降级全部回退 RRF 原序、单对裸 float 兼容。偏离：
+  拷贝候选不改写调用方。Demo 真实加载 bge-reranker-v2-m3：英文精排纠偏 7/8、
+  中文 gap 0.917、跨语言英文相关块 0.907 胜中文无关块 0.000（不被语言相同
+  迷惑；元数据卡片因摘要相关被弃作无关对照）。
+- **`format.py` + `pipeline.py`** ✅ `11d80d9`：format 是 `[chunk:<id>]` 硬
+  不变量的物理源头（测试逐字钉死令牌行），信封保持英文（LLM 协议文本，非用户
+  可见，中文正文原样在 body）。pipeline 四个组装心思：多查询池化取高分、中英
+  模态线索追加定向轮、`top_k*3` 精排窗口、单篇限额 2 + 溢出补位。过渡偏离：
+  `rag.query_rewrite`（P7）缺席时恒等改写 + warning，P7 落地自动恢复。
+  **同课修复中文长查询串长分流**（hybrid 课记账边界）：≤6 字按 bigram 短语保
+  精度，>6 字拆 bigram OR 词袋靠 IDF 排序，配置 `fts5_phrase_max_run: 6`。
+  Demo 端到端联试；写作中自纠"单篇 ≤2"断言——补位场景下合法超限。
+
 ## 已关闭/已诊断问题的细节
 
 - **arXiv 真实端点不稳定（2026-07-31 诊断，待修复）**：

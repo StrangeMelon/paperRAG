@@ -17,52 +17,22 @@
   `multimodal_chunker.py` ✅（2026-08-01，含 builder 多模态循环/layout 增强/
   vision 钩子接回，`a972bd8`，本课首次按新验收流程由用户实跑测试与 Demo 并
   与预期对比通过，细节见归档）。
-- **P6 检索层进度**：`retrieve/dense.py` ✅（`45c86c0`，2026-08-04。零偏离薄封装
-  + 包入口 `retrieve/__init__.py`；4 个打桩边界测试；真实 Demo
-  `scripts/demo_dense.py` 只读复用 `demo-ingest-pipeline-data/`，验证英文 top-3
-  与入库课逐分吻合、paper_ids/modality 过滤、中文问题跨语言命中同篇英文论文——
-  dense 层中文适配点为零的结论已实证）；`retrieve/fts5.py` ✅（`aeec63d`，
-  2026-08-04，**ADR-0001**（docs/adrs/，已 accepted）记录三处结构性偏离：
-  中文 CJK bigram 分词镜像 + JOIN 回原文、补 porter 词干器、去触发器改
-  Python 同步（`reindex_all`/`sync_paper`）+ search 行数自愈。顺手修复基准
-  查询清洗把 `Graph-Mamba` 黏成 `GraphMamba` 的缺陷（改为替空格）；单中文字
-  查询用前缀 `"字"*` 兜底。配置新增 `retrieve.fts5_cjk_bigram`。20 边界测试
-  （真实临时 SQLite）；Demo `scripts/demo_fts5.py` 用真实英文库副本 + 真实
-  中文期刊 62 chunks：基准复现召回 1/26（"0 命中"断言被真实数据修正——仅
-  标点巧合切出独立 run 可命中，ADR 已按实测改写）、自愈回填、GMB 精确命中、
-  porter 召回、中文 bigram 检索、reindex 111 行，用户实跑 exit 0。已记账
-  边界：bigram 索引无 unigram，原地 UPDATE 不触发行数自愈）。
-- **唯一下一步**：P6 收尾课 `retrieve/format.py` + `retrieve/pipeline.py`（组合
-  入口），开题决策点：a) `pipeline.py` 默认依赖 `rag.query_rewrite`（P7 才重建），
-  过渡期回退方案需确认；b) 中文长查询短语边界修复方案（hybrid 课记账）；
-  c) `format_evidence` 英文信封是否按语言路由。
-- **P6 已完成（rerank 课）**：`rerank.py` ✅（`4140338`，2026-08-05。与基准逐
-  语义对齐：懒加载单例 + `_LOAD_FAILED` 闩锁、四层降级回退 RRF 原序、单对裸
-  float 兼容、normalize sigmoid 分数；唯一偏离：拷贝候选不改写调用方（与
-  hybrid 不可变约定一致）。9 边界测试；Demo 真实加载 bge-reranker-v2-m3：
-  英文精排 16→8 纠偏 7/8、中文对照 gap 0.917、跨语言对英文相关块 0.907 胜
-  中文无关块 0.000（不被语言相同迷惑；元数据卡片因摘要相关被弃作无关对照）、
-  不可变契约、enabled=false 直通。用户实跑 exit 0）。
-- **P6 已完成课次（近两课）**：`hybrid.py` ✅（`3ecc6c8`，2026-08-04。RRF 名次
-  融合与基准逐项对齐；偏离一处：rrf_fuse 拷贝条目不改写调用方 dict。
-  `fts5.sync_paper` 接入 ingest index 步（非致命，ADR-0001 规模修订待办关闭，
-  测试钉住 delete→upsert→fts_sync 顺序）；回退语义保持"仅异常回退"（根源已修，
-  ADR 补记）。10 边界测试；Demo 真双语双库（中文期刊 62 块首次真实嵌入 Qdrant
-  副本），跨语言改述查询实证两腿失败模式互补（sparse=0/dense 命中/融合不空），
-  注入故障验证 bm25 接管。用户实跑验收通过）。**新记账边界（hybrid 课发现，
-  修复放 pipeline 收尾课经用户确认）**：fts5 查询构造把连续中文串整体当作
-  bigram 短语，句子级中文查询等价于整句子串精确匹配（全有或全无）；QA 上游
-  query rewrite 可缓解，建议按串长阈值拆 OR。
-- **P6 已完成课次详情**：`sparse_bm25.py` ✅（`e5ce271`，2026-08-04。中文
-  unigram 统一为 bigram 复用 `segment_cjk`（跨模块一致性测试钉住，关闭
-  ADR-0001 粒度记账）；删只写不读的 pickle；payload 填真实 section/title；
-  行数自愈；**0 分块丢弃**（基准把无词项交集的 0 分块凑满 top_k 返回，纯噪声）；
-  规模护栏 `retrieve.bm25_max_chunks: 200000` 超限拒建+告警（20000 篇 ≈ 10^6
-  chunks 约束的直接产物，rank_bm25 定位改写为小规模后备+评测对照）。15 边界
-  测试含"top 全被噪声占据时先打分后过滤"复现；Demo 双后端对照：中文 top-10
-  重叠、GMB 一致、porter 行为差（词对 prioritizes/prioritization 经真实语料
-  预核对——dependency 词对因语料真含 2 块单数词形被弃用）、护栏与自愈恢复。
-  用户实跑验收通过）。
+- **P6 检索层：七文件全部完成，已收口**（2026-08-04 — 08-05，逐课细节见归档
+  `docs/learning/LEARNING_HISTORY.md` 的"P6 检索层逐课细节"）：
+  `dense.py` ✅ `45c86c0` → `fts5.py` ✅ `aeec63d`（ADR-0001 accepted）→
+  `sparse_bm25.py` ✅ `e5ce271` → `hybrid.py` ✅ `3ecc6c8` →
+  `rerank.py` ✅ `4140338` → `format.py` + `pipeline.py` ✅ `11d80d9`。
+  全量 375 passed，Ruff 干净，每课均由用户实跑测试 + 真实 Demo 验收通过。
+  当前可用的检索链路：`retrieve_round(query, paper_ids, top_k)` 走完
+  rewrite（P7 前恒等回退）→ 多查询池化 hybrid → cross-encoder 精排 →
+  论文多样化，出口块带 `score_rerank`；`format_evidence` 渲染带
+  `[chunk:<id>]` 令牌的证据文本。
+- **P6 遗留记账边界**（均已确认暂不处理）：bigram 索引无 unigram、fts5 原地
+  UPDATE 不触发行数自愈；`_diversify_by_paper` 补位场景下单篇可合法超限额。
+- **唯一下一步**：P7（RAG/QA 层）开题，第一课 `rag/query_rewrite.py`
+  ——落地后 pipeline 的 `identity rewrite` warning 自动消失。开题需先核对基准
+  `rag/` 目录的依赖顺序与 LLM 客户端边界（`rag/llm.py` 是否需先行），并确认
+  中文查询改写/HyDE 的语言路由方案与真实 LLM 验收所需的 API 配置。
 - **P5 进度（两课全部完成，P5 收口）**：`embed/bge_m3.py` ✅（`a91a30b`；环境
   同步命令 `uv sync --extra dev --extra embed --extra ingest --extra mineru`，
   **四个 extra 必须齐**，漏 dev 会卸掉 pre-commit/fastapi；BGE-M3 已缓存在
@@ -284,9 +254,11 @@ collection；LLM、嵌入、MinerU 用真实配置/模型/API。
 7 解析（PyMuPDF 兜底、MinerU 双语 GPU OCR、调度器降级）与 8 切块（section
 splitter → text chunker → contextual → page_markers → builder → sanity →
 multimodal chunker，7 文件全部 ✅）均已完成，提交清单见归档。P5（嵌入与入库）
-已完成：`embed/bge_m3.py` ✅ → `store/ingest_pipeline.py` ✅（提交待用户执行）。
-当前进入 P6 检索层：dense → fts5 → sparse_bm25 → hybrid(RRF) → rerank →
-format/pipeline。
+已完成：`embed/bge_m3.py` ✅ → `store/ingest_pipeline.py` ✅（`5201259`）。
+P6 检索层已收口：dense ✅ → fts5 ✅ → sparse_bm25 ✅ → hybrid(RRF) ✅ →
+rerank ✅ → format/pipeline ✅。下一阶段 P7（RAG/QA 层），预期顺序：
+query_rewrite → llm → reflect/evidence_select → abstain → citation_check →
+qa_simple/qa_stream/qa_agentic（实际顺序开题前按基准依赖关系核对）。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
 Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、

@@ -105,8 +105,39 @@ def test_rewrite_fn_without_wiki_context_param(monkeypatch):
     assert rw == {"dense_queries": ["q"]}
 
 
-def test_identity_fallback_when_query_rewrite_missing(monkeypatch):
-    """rag.query_rewrite 未重建(P7)时: 恒等改写 + warning, 检索照常。"""
+def test_uses_real_query_rewrite_by_default(monkeypatch):
+    """P7 落地后: 默认真的走 rag.query_rewrite.rewrite, 不再有 identity warning。
+
+    (P6 期间此处断言的是"模块缺席 -> 恒等改写 + warning"的过渡契约;
+    query_rewrite 重建后过渡结束, 契约翻转为"默认真接线"。)
+    """
+    calls = _stub(monkeypatch, hybrid_results=lambda q, m: [{"chunk_id": "a", "score_rrf": 0.5}])
+    warnings: list[str] = []
+    monkeypatch.setattr(pl.log, "warning", warnings.append)
+    # 让 query_rewrite 走本地启发式, 不发网络。
+    monkeypatch.setenv("PAPER_RAG_FORCE_LOCAL_REWRITE", "1")
+
+    chunks, rw = pl.retrieve_round_with_rewrite("原问题", None, 4)
+
+    assert rw["dense_queries"][0] == "原问题"  # 首项恒为原问题
+    assert "bm25_query" in rw, "应拿到 query_rewrite 的完整载荷, 而非恒等改写"
+    assert calls["hybrid"][0]["q"] == "原问题"
+    assert not any("identity rewrite" in w for w in warnings)
+    assert chunks and chunks[0]["chunk_id"] == "a"
+
+
+def test_identity_fallback_when_query_rewrite_import_fails(monkeypatch):
+    """query_rewrite 导入失败(如缺依赖)时仍降级为恒等改写 + warning, 检索照常。"""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _boom(name, *args, **kwargs):
+        if "query_rewrite" in name:
+            raise ImportError("simulated missing query_rewrite")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _boom)
     calls = _stub(monkeypatch, hybrid_results=lambda q, m: [{"chunk_id": "a", "score_rrf": 0.5}])
     warnings: list[str] = []
     monkeypatch.setattr(pl.log, "warning", warnings.append)

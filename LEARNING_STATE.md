@@ -17,10 +17,11 @@
   ADR-0002 亦已补提交 `c8d109a`）。第六课 `rag/reflect.py` ✅（2026-08-05 真实
   验收通过，已提交 `2a32494`）。第七课 `rag/citation_check.py` ✅（2026-08-05
   纯函数验收通过，已提交 `170c12d`；真实链路覆盖已随 qa_simple 课 Demo 兑现）。
-  第八课 `rag/qa_simple.py` ✅（2026-08-05 真实链路验收通过，**功能提交待用户
-  执行**）。下一课 `rag/qa_agentic.py`（agentic QA 主编排——P7 全部组件的
-  总合龙：intent → rewrite → 多轮检索循环(reflect) → evidence_select →
-  abstain → LLM → citation_check + 全程 trace）。
+  第八课 `rag/qa_simple.py` ✅（2026-08-05 真实链路验收通过，已提交 `d52f466`）。
+  第九课 `rag/qa_agentic.py` ✅（2026-08-05 真实链路验收通过，含前置
+  `observability/` 包一并重建，**功能提交待用户执行，建议拆两笔**）。下一课
+  `rag/qa_stream.py`（流式 QA——P7 收官课，SSE 事件序列 + 基准唯一流式
+  `_stream_chat`；llm 课遗留的"流式边界推迟到 qa_stream 课再定"在此兑现）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -46,7 +47,8 @@
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
   `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
   intent_classifier ✅ → evidence_select ✅ → abstain ✅ → reflect ✅ →
-  citation_check ✅ → qa_simple ✅ → qa_agentic（下一课）** → qa_stream。
+  citation_check ✅ → qa_simple ✅ → qa_agentic ✅ → qa_stream（下一课, P7
+  收官）**。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
     `llm.extra_body` 透传**（Qwen 思考型模型非流式必须 `enable_thinking: false`
@@ -178,6 +180,31 @@
     `tests/test_qa_simple_real.py` 2 passed（数据注入打 LLM 边界）；测试与
     Demo 均在 `env -u` 干净 shell 复跑通过。citation_check 真实链路覆盖随本
     Demo 兑现。
+  - `rag/qa_agentic.py` + `observability/` ✅（2026-08-05 真实链路验收通过，
+    **功能提交待用户执行，建议拆两笔**：
+    ① `git add src/paper_rag/observability tests/test_observability.py` +
+    `feat(observability): 进程内指标与 trace id`；
+    ② `git add src/paper_rag/rag/qa_agentic.py tests/test_qa_agentic.py
+    tests/test_qa_agentic_real.py scripts/demo_qa_agentic.py
+    src/paper_rag/config.py config/default.yaml` +
+    `feat(rag): agentic QA 总合龙与双语拒答路由`）：七 Stage 编排(history 改写→
+    wiki 背景→qa_cache 短路→intent+检索循环→no_chunks 短路→abstain→
+    evidence_select+LLM+引用管道)，trace 全程账本 + loop trace + latency。
+    三处确认偏离：a) 前置重建 `observability/`(counter/histogram/new_trace_id，
+    零 prometheus 依赖自渲染文本格式——qa_agentic 对它的函数内 import **无**
+    try/except 保护，属硬依赖非钩子)；b) 系统/用户 prompt 与 no_chunks/chat
+    失败文案 zh/en 路由，weak hint 改调 abstain 课的
+    `weak_evidence_hint(language)`(伏笔兑现)；c) 配置新增
+    `rag.abstain.no_evidence_message_en` 按语言路由拒答文案(关闭 abstain 课
+    记账项)。钩子照抄：qa_cache/history/research_memory/wiki 均 try/except
+    降级(warning 诚实信号)。证据：边界测试 19+8 passed、全量纯逻辑
+    588 passed、Ruff 干净、`scripts/demo_qa_agentic.py` exit 0(真实全链：英文
+    factual/abstain 0.990/citations=2；中文 reasoning/0.994/citations=2 中文
+    答案；**域外"上海天气" abstain 0.0000 短路、作答 LLM 调用计数为 0、
+    citations 从 qa_simple 的 3 归零**——两条硬不变量在同一链路上闭环的实证；
+    Prometheus 指标节选打印)、`tests/test_qa_agentic_real.py` 2 passed(数据
+    注入+真实 intent/reflect/作答)；测试与 Demo 均在 `env -u` 干净 shell
+    复跑通过。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，

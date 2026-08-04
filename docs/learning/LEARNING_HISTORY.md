@@ -706,6 +706,41 @@
   只引给定 id、无可疑形态残留、中文答案中文）。边界测试 12 passed；全量纯
   逻辑 561 passed；Ruff 干净；测试与 Demo 均在 `env -u` 干净 shell 复跑通过。
   数据隔离在 `demo-qa-simple-data/`。
+- **`rag/qa_agentic.py` + `observability/`（P7 第九课，2026-08-05）**：P7 总
+  合龙。七 Stage 编排：history 改写(钩子)→wiki 背景(钩子, 只作 prompt 背景
+  永不作证据——硬不变量"证据边界")→qa_cache 短路(钩子)→intent 分类 +
+  `max_iter=min(intent档, max_inner_iters)` + `_retrieve_loop`(retrieve_round+
+  reflect)→`final_chunks=池[:top_k*2]` 空则 no_chunks 短路→abstain(no_evidence
+  跳过 LLM / weak 注入 hint)→evidence_select→组 prompt(Allowed citation
+  tokens 白名单 + 最多 2 引用)→chat(temperature=answer, max_tokens=1024, 失败
+  降级 evidence-only)→citation 三段管道→输出 + trace(intent/iters/stopped_by/
+  abstain/evidence_selection/trace_id) + loop trace(latency_ms) + memory 键。
+  开题前依赖核查发现 **observability 是无 try/except 保护的硬依赖**(qa_agentic
+  函数内 `from ..observability import counter` 直接炸)→前置一并重建：基准自研
+  165 行小包, 零 prometheus 依赖(加锁 dict 计数器/直方图 + 自渲染 Prometheus
+  文本 + snapshot/reset), ADR-0020 同决策。三处确认偏离：a) observability 前置
+  重建；b) prompt/文案 zh/en 路由(系统模板、用户模板含"最多使用 2 个引用"、
+  no_chunks 与 chat 失败文案), weak hint 改调 abstain 课 `weak_evidence_hint
+  (language)` 兑现伏笔；c) 配置新增 `rag.abstain.no_evidence_message_en`,
+  拒答文案按问题语言路由(关闭 abstain 课"英文问题收中文文案"记账项)。钩子
+  照抄：qa_cache/history/research_memory/wiki 全部 try/except 非致命降级,
+  模块未建时 warning 诚实信号(wiki 每次 QA 一行)；conversation_id 未传时
+  history/research_memory 静默跳过。
+- **`qa_agentic.py` 真实验收证据（2026-08-05，助手实跑，Demo 约 7 次 + 真实
+  测试约 5 次 LLM 调用）**：`scripts/demo_qa_agentic.py` exit 0——真实全链
+  (真实 BGE-M3/Qdrant/FTS5/reranker + 真实 Qwen 的 intent/reflect/作答)。
+  英文问: intent=factual、1 轮、abstain confident(0.990)、citations=2(prompt
+  的"最多 2 引用"实证生效)、suspicious=0；中文问: intent=reasoning、
+  confident(0.994)、citations=2、中文答案(主从多链结构…)；**域外"上海明天的
+  天气": abstain no_evidence(0.0000)、作答 chat 调用计数为 0、citations=0、
+  返回中文拒答文案——与 qa_simple 同题的 citations=3 正面对照, "无证据宁
+  拒答"与"[chunk:] 引用纪律"两条硬不变量在同一链路闭环**；Prometheus 指标
+  节选(qa_total 按 intent/stop 分桶、abstain_total 按 decision 分桶、latency
+  直方图)现场打印。`tests/test_qa_agentic_real.py` 2 passed(数据注入
+  `_retrieve_round` + 真实 intent/reflect/作答: 强证据 answered+confident+
+  引用纪律；低分噪声 no_evidence_abstain + 作答零调用)。边界测试 19 passed +
+  observability 8 passed；全量纯逻辑 588 passed；Ruff 干净；测试与 Demo 均在
+  `env -u` 干净 shell 复跑通过。数据隔离在 `demo-qa-agentic-data/`。
 
 ## 已关闭/已诊断问题的细节
 

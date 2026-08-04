@@ -50,6 +50,7 @@ retrieve:
   rrf_k: 60
   rerank_top_k: 8
   sparse_backend: fts5          # fts5 | rank_bm25
+  fts5_cjk_bigram: true         # 中文按相邻二字对(bigram)入索引; false 退回基准原文行为
 
 rag:
   max_inner_iters: 3

@@ -80,6 +80,7 @@ class _Retrieve(BaseModel):
     rrf_k: int = 60
     rerank_top_k: int = 8
     sparse_backend: str = "fts5"
+    fts5_cjk_bigram: bool = True
 
 
 class _Abstain(BaseModel):

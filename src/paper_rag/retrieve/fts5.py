@@ -145,10 +145,15 @@ def _sync_if_stale() -> None:
 def _build_match_query(query: str) -> str:
     """自然语言查询 -> FTS5 MATCH 语法: 原子加引号成短语, OR 连接。
 
-    CJK 串按与索引侧同一套 bigram 展开成短语原子(bigram 序列连续出现即等价于
-    子串命中); 单个 CJK 字用前缀匹配 "字"* 兜底(索引里只有 bigram, 无 unigram)。
+    CJK 串按与索引侧同一套 bigram 展开; 串长分流(fts5_phrase_max_run, 默认 6):
+    - 短串(术语形态, 如 区块链/图神经网络): bigram 短语原子, 连续命中等价于
+      子串匹配, 保精度;
+    - 长串(句子形态): 短语匹配是全有或全无(P6 收尾课修复的记账边界), 改拆
+      bigram OR 词袋, 靠 BM25 排序保召回;
+    - 单个 CJK 字: 前缀匹配 "字"* 兜底(索引里只有 bigram, 无 unigram)。
     """
     bigram = _bigram_enabled()
+    max_run = int(cfg.load().retrieve.fts5_phrase_max_run)
     atoms: list[str] = []
     for token in _SANITIZE_RE.sub(" ", query).split():
         pos = 0
@@ -160,8 +165,10 @@ def _build_match_query(query: str) -> str:
                 atoms.append(f'"{run}"')
             elif len(run) == 1:
                 atoms.append(f'"{run}"*')
-            else:
+            elif len(run) <= max_run:
                 atoms.append(f'"{segment_cjk(run)}"')
+            else:
+                atoms.extend(f'"{run[i : i + 2]}"' for i in range(len(run) - 1))
             pos = m.end()
         if pos < len(token):
             atoms.append(f'"{token[pos:]}"')

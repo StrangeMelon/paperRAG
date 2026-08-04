@@ -81,6 +81,7 @@ class _Retrieve(BaseModel):
     rerank_top_k: int = 8
     sparse_backend: str = "fts5"
     fts5_cjk_bigram: bool = True
+    fts5_phrase_max_run: int = 6
     bm25_max_chunks: int = 200000
 
 

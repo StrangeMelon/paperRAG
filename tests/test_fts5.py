@@ -25,14 +25,14 @@ from types import SimpleNamespace
 from paper_rag.retrieve import fts5
 
 
-def _isolated(monkeypatch, tmp_path: Path, *, bigram: bool = True):
+def _isolated(monkeypatch, tmp_path: Path, *, bigram: bool = True, phrase_max_run: int = 6):
     """真实临时 SQLite 库 + 配置隔离; 返回 (fts5, sqlite_store)。"""
     import paper_rag.config as config
     from paper_rag.store import sqlite_store
 
     conf = SimpleNamespace(
         paths=SimpleNamespace(sqlite_path=str(tmp_path / "papers.sqlite")),
-        retrieve=SimpleNamespace(fts5_cjk_bigram=bigram),
+        retrieve=SimpleNamespace(fts5_cjk_bigram=bigram, fts5_phrase_max_run=phrase_max_run),
     )
     monkeypatch.setattr(config, "load", lambda path=None: conf)
     monkeypatch.setattr(sqlite_store, "_ENGINE", None)
@@ -116,6 +116,31 @@ def test_match_query_empty_or_symbols_returns_sentinel(monkeypatch, tmp_path):
 def test_match_query_bigram_disabled_falls_back_to_whole_run(monkeypatch, tmp_path):
     f, _ = _isolated(monkeypatch, tmp_path, bigram=False)
     assert f._build_match_query("长程依赖") == '"长程依赖"'
+
+
+def test_match_query_long_run_becomes_or_bag(monkeypatch, tmp_path):
+    """句子级中文串(>fts5_phrase_max_run 字)拆 bigram OR 词袋, 不再整句短语匹配。
+
+    P6 收尾课修复(hybrid 课记账): 短语匹配对句子形态查询是全有或全无。
+    """
+    f, _ = _isolated(monkeypatch, tmp_path, phrase_max_run=6)
+    out = f._build_match_query("图上相距很远的节点")  # 9 字
+    assert out == '"图上" OR "上相" OR "相距" OR "距很" OR "很远" OR "远的" OR "的节" OR "节点"'
+
+
+def test_match_query_phrase_threshold_boundary(monkeypatch, tmp_path):
+    f, _ = _isolated(monkeypatch, tmp_path, phrase_max_run=6)
+    # 恰好 6 字仍走短语(术语形态保精度)
+    assert f._build_match_query("图神经网络层") == '"图神 神经 经网 网络 络层"'
+
+
+def test_search_long_sentence_query_recalls_by_bag(monkeypatch, tmp_path):
+    """端到端: 文档只含'长程依赖建模', 句子式查询靠词袋仍能召回。"""
+    f, store = _isolated(monkeypatch, tmp_path)
+    _add_chunks(store, _CORPUS)
+
+    hits = f.search("在长程依赖建模上有什么局限")  # 12 字, 整句并未逐字出现于任何文档
+    assert hits and hits[0]["chunk_id"] == "c-zh-1"
 
 
 # ---------- 切片 2: 真实临时库端到端 ----------

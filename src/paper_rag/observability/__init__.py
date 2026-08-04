@@ -1,0 +1,10 @@
+"""可观测性原语: 指标 + trace id。
+
+Public API:
+    from paper_rag.observability import counter, histogram, render, new_trace_id
+"""
+
+from .metrics import counter, histogram, render, reset, snapshot
+from .trace import new_trace_id
+
+__all__ = ["counter", "histogram", "new_trace_id", "render", "reset", "snapshot"]

@@ -421,6 +421,64 @@
   精度，>6 字拆 bigram OR 词袋靠 IDF 排序，配置 `fts5_phrase_max_run: 6`。
   Demo 端到端联试；写作中自纠"单篇 ≤2"断言——补位场景下合法超限。
 
+## P7 RAG/QA 层逐课细节（2026-08-05 起）
+
+- **开题依赖核对（2026-08-05）**：逐文件扫基准 `rag/` 的 import，确认
+  `query_rewrite.py` 在**模块顶层** `from .llm import chat`，`llm.py` 是整个 rag
+  层依赖图的根（`intent_classifier`/`reflect`/`history`/`research_memory`/三条 QA
+  路径全依赖它）。据此把 P7 第一课由状态文件原定的 `query_rewrite` **改为
+  `llm.py`**，后续顺序修正为 llm → query_rewrite → intent_classifier →
+  evidence_select → abstain → reflect → citation_check → qa_simple → qa_agentic
+  → qa_stream。
+- **流式与异步边界（用户提问后核实）**：基准全链路只有一处流式调用——
+  `qa_stream.py::_stream_chat` 绕过 `chat()` 直接 `get_client()` 传 `stream=True`，
+  唯一目的是给 DeerFlow 前端 SSE 供打字机效果（引用校验仍等 token 攒完再做）。
+  其余全部非流式。异步同理：基准是"全同步引擎 + 网关边界线程池包装"
+  （`async_api.py` 用 `anyio.to_thread.run_sync`，理由写在其 docstring：全面异步
+  化要动约 30 文件，而客户端单例已复用连接、Qdrant/SQLite 亚毫秒、LLM 往返等待
+  不占 GIL）。**结论**：`llm.py` 保持同步非流式；流式推迟到 `qa_stream` 课再决定
+  是否重建，异步推迟到网关阶段作独立小课。
+- **`llm.py`** ✅ `92662d2`（2026-08-05 真实验收通过）：模块级单例
+  三件套 `_CLIENT`/`_CLIENT_KEY`/`_LOCK`，惰性构建 + 双重检查加锁，
+  `(base_url, api_key)` 变化自动重建（测试 monkeypatch 与热改配置都不失效），
+  openai 包在函数内懒导入（符合重依赖进函数约定）。`chat()` 签名与基准逐参
+  一致（`model` 形参覆盖配置、默认 `temperature=0.2/max_tokens=1024`、
+  `content or ""` 兜空）。**一处确认偏离——`llm.extra_body` 透传**：`_Llm` 新增
+  `extra_body: dict[str, Any] = {}` + `default.yaml` 对应加键，非空时透传给
+  `chat.completions.create`；空表（缺省）时调用形参与基准逐键一致，有专测钉死
+  （`test_empty_extra_body_keeps_baseline_call_shape`）。动因是 Qwen(DashScope
+  兼容模式)思考型模型**非流式调用必须 `enable_thinking: false`，否则 400**
+  （联网核实：`parameter.enable_thinking must be set to false for non-streaming
+  calls`），从此只是一行本地配置，换回 OpenAI 零成本。同课新建包入口
+  `rag/__init__.py`（解析层"克隆即失败"教训）与 `.env.example`（DashScope 兼容
+  模式模板；`.env` 已被 gitignore）。边界测试 13 个四切片全打桩不发网络；全量
+  纯逻辑 380 passed 无回归；Ruff 干净。
+- **`llm.py` 真实验收证据（2026-08-05，助手实跑，用户 `.env` 已就位）**：
+  `scripts/demo_llm_chat.py` exit 0——真实 `CHAT_MODEL=qwen3.8-max` 非流式中文
+  回复非空、`get_client()` 两次同一对象、`extra_body={enable_thinking: false}`
+  被 DashScope 接受（英文回复非空）、`model` 形参覆盖 `qwen3.7-flash` 回"收到"；
+  `tests/test_llm_real.py` 2 passed（无 mock，缺配置 `pytest.fail` 不 skip）。
+  **偏离对 Qwen 全系有效**（用户实际用的是比预设 `qwen-plus` 更新的一代）。
+  真实观察记账：`qwen3.8-max` 在短问题上会自行漂移话题（问 RAG 答成
+  GraphRAG）——不违反 `llm.py` 的"非空字符串"契约，但预示 `query_rewrite` 课
+  要求严格 JSON 输出时必须保留基准的 `re.search(r"\{.*\}", raw, re.DOTALL)`
+  抠 JSON + 异常回退启发式。
+- **`query_rewrite.py` 已确认方案（2026-08-05 用户确认，待实现）**：基准英文隐式
+  假设与中文扩展——a) prompt 单一英文模板且要求 lowercase keywords（对中文无
+  意义）→ 新增 `_query_language(q)` 按 CJK 码位占比判 `zh/en`（查询侧无
+  `meta.json` 可依赖，只能启发式），zh 走中文模板；b) **跨语言 BM25 断层**：
+  FTS5/BM25 是词面匹配，纯中文 keywords 永远打不中英文论文块 → zh 模板要求
+  keywords **中英双语混出**并含 1 条英文改写变体（稠密侧 BGE-M3 本身跨语言，
+  无需处理）；c) `_ORIGINAL_ALIAS_RE` 只识英文 "the original RAG paper" → 增
+  `最初/原始/最早的 X`、`X 的原(始)论文` 两类中文形态；d) **`_aliases_for_title`
+  的 CJK 邻接缺陷**：Python `re` 把汉字算 `\w`，`\b[A-Z][A-Z0-9-]{1,20}\b` 在
+  "基于Mamba的图建模" 里 `于M` 之间无词边界，中文标题内嵌拉丁缩写词（重建语料
+  真实存在，如别名 GM）提取不到 → 换显式 lookaround（前后非 `[A-Za-z0-9]`）；
+  e) `_heuristic_variants` 的话题触发表是基准演示语料专属启发式，小写子串匹配
+  对中文天然不触发、无害，照抄保留。`PAPER_RAG_FORCE_LOCAL_REWRITE` 逃生门、
+  wiki 钩子（try/except + warning，与 vision 同款）、`_dedupe`、sqlite 别名回查
+  全部按基准同构。
+
 ## 已关闭/已诊断问题的细节
 
 - **arXiv 真实端点不稳定（2026-07-31 诊断，待修复）**：

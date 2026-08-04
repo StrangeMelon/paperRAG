@@ -6,8 +6,9 @@
 
 ## 当前定位
 
-- 当前阶段：P4（采集、解析和切块）与 P5（嵌入与入库流水线）**已全部完成**
-  （P5 功能提交 `5201259` 已由用户执行，2026-08-04 核验）；当前课次：P6 检索层。
+- 当前阶段：P1–P6 **已全部完成并收口**；当前阶段 **P7（RAG/QA 层）已开题**，
+  第一课 `rag/llm.py` 已完成真实验收（功能提交待用户执行），下一课
+  `rag/query_rewrite.py`（方案已确认，见下）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -29,10 +30,31 @@
   `[chunk:<id>]` 令牌的证据文本。
 - **P6 遗留记账边界**（均已确认暂不处理）：bigram 索引无 unigram、fts5 原地
   UPDATE 不触发行数自愈；`_diversify_by_paper` 补位场景下单篇可合法超限额。
-- **唯一下一步**：P7（RAG/QA 层）开题，第一课 `rag/query_rewrite.py`
-  ——落地后 pipeline 的 `identity rewrite` warning 自动消失。开题需先核对基准
-  `rag/` 目录的依赖顺序与 LLM 客户端边界（`rag/llm.py` 是否需先行），并确认
-  中文查询改写/HyDE 的语言路由方案与真实 LLM 验收所需的 API 配置。
+- **P7 RAG/QA 层（进行中，2026-08-05 开题）**：依赖核对结论——`llm.py` 是 rag 层
+  依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
+  `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite（下一课）**
+  → intent_classifier → evidence_select → abstain → reflect → citation_check →
+  qa_simple → qa_agentic → qa_stream。
+  - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
+    模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
+    `llm.extra_body` 透传**（Qwen 思考型模型非流式必须 `enable_thinking: false`
+    否则 400；空表缺省时调用形参与基准逐键一致，有专测钉死）。同课新建
+    `rag/__init__.py` 与 `.env.example`。证据：边界测试 13 passed、全量纯逻辑
+    380 passed、Ruff 干净、`scripts/demo_llm_chat.py` exit 0（真实
+    `qwen3.8-max`/`qwen3.7-flash`）、`tests/test_llm_real.py` 2 passed。
+  - **流式与异步边界已定**（用户提问后核实基准）：基准只有 `qa_stream::_stream_chat`
+    一处流式（为 DeerFlow 前端 SSE），其余全非流式；异步是"全同步引擎 + 网关边界
+    `anyio.to_thread.run_sync` 包装"。**结论**：非流式为主链路，流式推迟到
+    `qa_stream` 课再定，异步推迟到网关阶段独立小课，不提前引入。
+  - **下一步 `rag/query_rewrite.py`**（方案已于开题确认，细节见归档"P7 逐课细节"）：
+    zh/en 双 prompt 模板路由（`_query_language` 按 CJK 码位占比判定）、zh 的
+    keywords **中英双语混出**以跨越 BM25 词面断层、中文"原始/最早的 X 论文"别名
+    正则、修 `_aliases_for_title` 的 CJK 邻接词边界缺陷（中文标题内嵌拉丁缩写词
+    提取不到）。落地后 pipeline 的 `identity rewrite` warning 自动消失。
+  - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
+    `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
+    `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，
+    未被顺带纳入。
 - **P5 进度（两课全部完成，P5 收口）**：`embed/bge_m3.py` ✅（`a91a30b`；环境
   同步命令 `uv sync --extra dev --extra embed --extra ingest --extra mineru`，
   **四个 extra 必须齐**，漏 dev 会卸掉 pre-commit/fastapi；BGE-M3 已缓存在
@@ -256,9 +278,11 @@ splitter → text chunker → contextual → page_markers → builder → sanity
 multimodal chunker，7 文件全部 ✅）均已完成，提交清单见归档。P5（嵌入与入库）
 已完成：`embed/bge_m3.py` ✅ → `store/ingest_pipeline.py` ✅（`5201259`）。
 P6 检索层已收口：dense ✅ → fts5 ✅ → sparse_bm25 ✅ → hybrid(RRF) ✅ →
-rerank ✅ → format/pipeline ✅。下一阶段 P7（RAG/QA 层），预期顺序：
-query_rewrite → llm → reflect/evidence_select → abstain → citation_check →
-qa_simple/qa_stream/qa_agentic（实际顺序开题前按基准依赖关系核对）。
+rerank ✅ → format/pipeline ✅。P7（RAG/QA 层）已开题，**顺序已按基准依赖核对
+修正**（原预排的 query_rewrite → llm 与实际依赖相反）：llm ✅ → query_rewrite →
+intent_classifier → evidence_select → abstain → reflect → citation_check →
+qa_simple → qa_agentic → qa_stream（qa_cache/history/async_api/research_memory
+视需要排后；async_api 归入网关阶段）。
 
 阶段门禁：解析门禁已于 2026-07-31 满足。临时例外（2026-07-29 用户确认）：Semantic
 Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前必须回补真实 Demo、
@@ -275,6 +299,10 @@ Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前�
   API key 后先跑 Demo，再补无 mock 集成测试。
 - `AGENTS.md`、`CLAUDE.md`、`scripts/demo_semantic_scholar_source.py` 为未跟踪文件，
   助手不得擅自纳入提交。
+- P7 起真实验收需 `.env` 提供 `OPENAI_BASE_URL`/`OPENAI_API_KEY`/`CHAT_MODEL`
+  （用户用通义千问 DashScope 兼容模式，2026-08-05 实测 `qwen3.8-max` +
+  `qwen3.7-flash`）。`.env` 被 gitignore；模板见已跟踪的 `.env.example`。
+  Qwen 思考型模型非流式调用需在配置加 `llm.extra_body: {enable_thinking: false}`。
 - `vision/` 模块推迟到核心 RAG 链（嵌入→存储→检索→QA）跑通之后（2026-08-01
   与用户确认）：基准默认 `vision.enabled: false`，builder 钩子已接回、行为与
   基准默认态等价，仅多一行 warning 诚实信号。届时真实验收需要

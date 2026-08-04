@@ -776,6 +776,35 @@
   干净 shell 复跑通过。数据隔离在 `demo-qa-stream-data/`。**P7 RAG/QA 层十课
   全部完成收口**(qa_cache/history/research_memory 视需要排后，async_api 归
   网关阶段)。
+- **`scripts/ask.py`（第十一课，2026-08-05）**：CLI 问答入口，闭合 CLAUDE.md
+  核心三步 init_store → ingest_one → ask 的最后一环。基准考古：基准 ask.py
+  停在 phase-1 只接 qa_simple——qa_agentic/qa_stream 建成后没人回来升级 CLI
+  (agentic 的消费方是 DeerFlow 网关)，基准里无法从命令行体验完整 agentic
+  链路。确认偏离：补 `--agentic`(qa_agentic + TRACE 摘要: intent/iters/
+  stopped_by/abstain 决策与证据分/latency)与 `--stream`(qa_stream 打字机
+  事件渲染, error 事件返回非零)两个互斥模式；默认模式仍 qa_simple 与基准
+  同构；`--no-llm` 照抄；输出标头保持基准英文(工具层文案, 答案本身已由引擎
+  按问题语言路由, 记账可后续加 --lang)。测试性小偏离: parse_args/main 接受
+  argv 形参(缺省 sys.argv 行为不变)。
+- **`ask.py` 真实验收证据（2026-08-05，助手实跑，首次进程级验收形态）**：
+  `scripts/demo_ask.py` exit 0——组装隔离双语库落 `demo-ask-data/`，基于
+  default.yaml 生成指向隔离数据的完整 config.yaml，经 `PAPER_RAG_CONFIG`
+  注入后 **subprocess 运行真实 CLI 进程五次**(此前 Demo 均为进程内调用,
+  本课以用户实际使用形态验收)：--no-llm 输出 4 个证据块零 LLM；默认模式
+  ANSWER/CITATIONS 结构成立(citations=4)；--agentic 中文问得中文答案 +
+  TRACE 摘要(reasoning/answered/confident(0.9936)/latency 59987ms)；
+  --stream 事件行+流式 ANSWER+引用清单；--stream 域外"上海天气" abstain
+  短路、拒答文案流出、citations=0。**新边界教训**：首跑失败——embedded
+  Qdrant 对存储目录持锁, 父进程(数据准备)未释放时 CLI 子进程的 search
+  **静默返回空结果**(rc 仍 0, 软降级掩盖问题)；修复为数据准备完毕后调用
+  `qdrant_store.close_client()` 释放目录锁再起子进程。该边界对所有
+  "embedded 模式 + 多进程"场景通用(生产走远程服务模式无此问题, embedded
+  仅 demo——与既有约束一致)。边界测试 8 passed(`scripts.ask` 命名空间导入
+  需 `uv run python -m pytest`, 与 init_store 脚本测试同款约束)；全量纯逻辑
+  613 passed；Ruff 干净；边界测试与 Demo 均在 `env -u` 干净 shell 复跑通过。
+  数据隔离在 `demo-ask-data/`, 用户可直接
+  `PAPER_RAG_CONFIG=demo-ask-data/config.yaml uv run python scripts/ask.py
+  "问题" --stream` 亲手体验四种模式。
 
 ## 已关闭/已诊断问题的细节
 

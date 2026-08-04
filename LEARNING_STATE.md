@@ -21,10 +21,24 @@
   第九课 `rag/qa_agentic.py` ✅（2026-08-05 真实链路验收通过，含前置
   `observability/` 包，已提交 `cfe67fd` + `9175749`）。第十课
   `rag/qa_stream.py` ✅（2026-08-05 真实流式验收通过，已提交 `e976dc2`）。
-  **P7 十课全部完成并全部入库，RAG/QA 层收口**。下一课（建议）：`scripts/ask.py`
-  CLI 问答入口（闭合 CLAUDE.md 核心三步 init_store → ingest_one → ask 的
-  最后一步，小课）；备选：P7 卫星模块（qa_cache/history/research_memory）、
-  评测层（golden set + gates）、Discovery 扩展——开题前由用户定夺。
+  **P7 十课全部完成并全部入库，RAG/QA 层收口**。第十一课 `scripts/ask.py` ✅
+  （2026-08-05 进程级真实验收通过，**功能提交待用户执行**，建议清单：
+  `scripts/ask.py`、`tests/test_ask_script.py`、`scripts/demo_ask.py`，message
+  `feat(cli): ask 问答入口与 agentic/流式模式`）：CLAUDE.md 核心三步
+  init_store → ingest_one → ask 闭环收尾。基准停在 phase-1 只接 qa_simple，
+  确认偏离补 `--agentic`（trace 摘要）与 `--stream`（打字机渲染）互斥模式，
+  默认模式仍 qa_simple 与基准同构。验收首次采用**进程级形态**：demo_ask.py
+  生成指向隔离数据的完整配置，经 `PAPER_RAG_CONFIG` 注入后 subprocess 运行
+  真实 CLI 五次（--no-llm 4 块零 LLM / 默认 ANSWER+CITATIONS / --agentic 中文
+  答案+TRACE confident(0.9936) / --stream 流式结构 / --stream 域外 abstain
+  短路拒答文案流出）。**新边界教训（已归档）：embedded Qdrant 持目录锁，父
+  进程准备数据后必须 `qdrant_store.close_client()` 再起 CLI 子进程，否则子
+  进程 search 静默返回空**。证据：边界测试 8 passed（`scripts.ask` 导入需
+  `python -m pytest`，与 init_store 同款约束）、全量纯逻辑 613 passed、Ruff
+  干净、`env -u` 干净 shell 复跑通过。用户可用
+  `PAPER_RAG_CONFIG=demo-ask-data/config.yaml uv run python scripts/ask.py
+  "问题" --stream` 亲手体验。下一课（建议）：P7 卫星模块或评测层——开题前
+  由用户定夺。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；

@@ -659,3 +659,4 @@
 - `92662d2 feat(rag): OpenAI 兼容 LLM 客户端与 Qwen extra_body 透传`（P7 第一课）
 - `46be7c3 feat(rag): 查询改写与 HyDE 的中文语言路由与双语关键词`（P7 第二课，含 conftest）
 - `762d353 feat(rag): 意图三档分类与配置化检索档位`（P7 第三课）
+- `83b9d30 feat(rag): 确定性证据选择与 CJK bigram 词面重叠`（P7 第四课；ADR-0002 漏纳入，待补提交）

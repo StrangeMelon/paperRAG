@@ -817,6 +817,40 @@
   复跑用户原命令, 真实流式中文答案(主从多链/六层逻辑架构)+2 引用+exit 0。
   顺带一个 Ruff 细节：E402 允许 `sys.path.insert(...)` 表达式语句先于
   import, 但赋值语句(`_REPO_ROOT = ...`)会破坏豁免——常量移到 import 之后。
+- **`scripts/ingest_one.py` + `scripts/ingest_batch.py`（第十二课，
+  2026-08-05）**：由用户真实需求驱动("一个文件夹几百篇中英混合 PDF 全部
+  入库")。方案讨论结论：a) **元数据补全推迟为独立后续课**——用户本地 PDF 无
+  元数据, 确认方案为三级递进(PDF 首页正则抽 arXiv/DOI → 喂现有权威源;
+  抽不到用疑似标题查 S2 `/paper/search`(现有代码无此方法, 需新增)/OpenAlex
+  并做相似度校验, 错的元数据比空的更有害; 兜底文件名+unresolved 标记;
+  中文期刊 API 覆盖率低, 更宜首页结构化解析含 Qwen 兜底), 先入库后补
+  (meta.json 可重写 + --force 可重建); b) 分两趟(元数据纯网络/入库占 GPU)
+  的执行策略同样归档待后续。基础设施核验: 用户 Qdrant 1.18.3 服务运行中,
+  paper_chunks(1024/Cosine)/wiki_entries 已建且空, SQLite 四表已建全空,
+  正式库干净; GPU RTX PRO 6000 Blackwell 97G 空闲; data/ 8.1G 全是模型缓存。
+  实现: ingest_one 照抄基准(--arxiv/--pdf/--title/--force) + .env 自加载 +
+  argv 形参; ingest_batch 按需求设计——平铺扫 *.pdf(大小写不敏感排序)、
+  逐篇 try/except 隔离(单篇失败不中断)、断点续跑(引擎幂等 done→skipped)、
+  --dry-run/--limit(试水)/--force/--report、逐篇 JSON 报告(status/chunks/
+  reason/error/seconds + summary)、退出码 0 无失败/1 有失败/2 参数目录错、
+  标题取文件名去扩展名、language 由解析层 auto 判定。
+- **`ingest_batch` 真实验收证据（2026-08-05，助手实跑，零 LLM 消耗）**：
+  `scripts/demo_ingest_batch.py` exit 0——**首次完整三步闭环的进程级实证**:
+  组装真实双语试验集(英文 Graph-Mamba PDF + 中文期刊 origin PDF)与隔离配置
+  (embedded Qdrant + 独立 SQLite, models_dir 指真实缓存离线命中), subprocess
+  依次跑 init_store → ingest_batch --dry-run(2 篇清单零副作用) →
+  ingest_batch 全量(**真实 GPU MinerU**: 英文 done 50 chunks/38.0s, 中文
+  done 82 chunks/32.8s, 合计 70.7s) → 原命令重跑(skipped=2, 断点续跑实证)
+  → ask --no-llm 中文问题新库检索命中 → 报告 JSON 逐篇字段齐全。**过程
+  发现**: 首轮两篇全 failed "Collection paper_chunks not found"——全新库必须
+  先跑 init_store 建表建 collections(逐篇隔离与失败报告恰好在此得到真实
+  锻炼: rc=1、错误落报告、批不中断); demo 补 init_store 步骤后通过, 也让
+  demo 恰好覆盖 CLAUDE.md 核心三步全链。单篇耗时 33-85s(重跑可复用已解析
+  产物), 几百篇预估 3-10 小时, 断点续跑可分多晚。边界测试 13 passed
+  (两脚本引擎全打桩); 全量纯逻辑 628 passed; Ruff 干净; 测试与 Demo 均在
+  `env -u` 干净 shell 复跑通过。数据隔离在 `demo-ingest-batch-data/`。
+  **用户正式批量入库待执行**(默认配置即指向其运行中的 Qdrant 服务与正式
+  data/, 无需改配置; 流程 --dry-run → --limit 3 → 全量)。
 
 ## 已关闭/已诊断问题的细节
 

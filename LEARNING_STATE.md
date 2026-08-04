@@ -42,8 +42,29 @@
   （共 10 passed，全量 615），并在剥离全部 LLM 变量的干净 shell 里复跑用户
   原命令实证通过（真实流式中文答案 + 2 引用 + exit 0）。用户可用
   `PAPER_RAG_CONFIG=demo-ask-data/config.yaml uv run python scripts/ask.py
-  "问题" --stream` 亲手体验。下一课（建议）：P7 卫星模块或评测层——开题前
-  由用户定夺。
+  "问题" --stream` 亲手体验。第十二课 `scripts/ingest_one.py` +
+  `scripts/ingest_batch.py` ✅（2026-08-05 进程级真实验收通过，**功能提交待
+  用户执行**，建议清单：`scripts/ingest_one.py`、`scripts/ingest_batch.py`、
+  `tests/test_ingest_one_script.py`、`tests/test_ingest_batch_script.py`、
+  `scripts/demo_ingest_batch.py`，message
+  `feat(cli): 单篇与批量入库入口`）：为用户"几百篇本地 PDF 文件夹入库"的
+  真实需求而建。ingest_one 照抄基准 + .env 自加载；ingest_batch 新增
+  (基准有对应物但未细读, 按需求独立设计)：平铺扫 *.pdf、逐篇 try/except
+  隔离、断点续跑(靠引擎幂等 skipped)、--dry-run/--limit/--force、逐篇
+  JSON 报告(status/chunks/耗时/错误, 缺省 <data_root>/ingest_batch_report.json)、
+  退出码 0/1/2。标题暂取文件名——**元数据补全方案已确认推迟为独立后续课**
+  (三级递进: PDF 首页抽 arXiv/DOI 查权威源 → 标题模糊搜索加相似度校验 →
+  中文首页结构化解析含 LLM 兜底; S2 标题搜索需新增 /paper/search 方法)。
+  真实验收 `demo_ingest_batch.py`：**首次完整三步闭环进程级实证**——隔离库
+  init_store → ingest_batch 真实双语 PDF(GPU MinerU: 英文 50 chunks/38s、
+  中文期刊 82 chunks/33s) → 重跑 skipped=2 幂等续传 → ask --no-llm 新库
+  检索命中。**过程发现**: 全新库必须先 init_store, 否则 Qdrant collection
+  不存在整批失败(demo 已补该步; 用户正式库已核验就绪: Qdrant 1.18.3 服务
+  运行中、paper_chunks/wiki_entries 已建、SQLite 四表已建全空)。证据: 边界
+  测试 13 passed、全量纯逻辑 628 passed、Ruff 干净、`env -u` 干净 shell
+  复跑通过。**用户正式批量入库待执行**(先 --dry-run 再 --limit 3 试水再
+  全量; 单篇 33-85s, 几百篇预估 3-10 小时)。下一课候选: 元数据补全 /
+  评测层——由用户定夺。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；

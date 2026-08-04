@@ -463,7 +463,37 @@
   GraphRAG）——不违反 `llm.py` 的"非空字符串"契约，但预示 `query_rewrite` 课
   要求严格 JSON 输出时必须保留基准的 `re.search(r"\{.*\}", raw, re.DOTALL)`
   抠 JSON + 异常回退启发式。
-- **`query_rewrite.py` 已确认方案（2026-08-05 用户确认，待实现）**：基准英文隐式
+- **`query_rewrite.py`** ✅（2026-08-05 真实验收通过，功能提交待用户执行）：按下条
+  已确认方案全部落地。四处中文扩展逐一有测试钉死；`_original_aliases` 抽为独立
+  纯函数收敛英文 + 两种中文别名正则；`_heuristic_variants` 的别名回查加
+  try/except（sqlite 不可用时降级不拖垮主出口）；`rewrite` 对 LLM 返回的
+  `variants` 做 `isinstance(list)` 与 `str()` 强化（真实模型会返回非列表/非字符串
+  元素）。**CJK 邻接缺陷已实证**：基准正则 `\b[A-Z][A-Z0-9-]{1,20}\b` 在
+  "基于GNN的图神经网络建模" 上 `findall` 返回 `[]`，改用显式 lookaround 后返回
+  `['GNN']`，且英文侧边界不放宽（`xxGNNyy` 两版都不匹配，有反向专测
+  `test_aliases_for_acronym_between_ascii_still_bounded`）。开题时误举的
+  `Mamba` 是混合大小写，基准英文侧同样取不到，故改用全大写 `GNN` 举证。
+  **P6 过渡契约翻转**：`tests/test_retrieve_pipeline.py::test_identity_fallback_when_query_rewrite_missing`
+  是 P6 期间为"模块缺席"写的临时契约，query_rewrite 落地后必然失败（pipeline
+  真的导入成功、不再 warning）。改为两个测试——`test_uses_real_query_rewrite_by_default`
+  （断言拿到含 `bm25_query` 的完整载荷且无 identity warning，用
+  `PAPER_RAG_FORCE_LOCAL_REWRITE=1` 保证不发网络）+
+  `test_identity_fallback_when_query_rewrite_import_fails`（打补丁
+  `builtins.__import__` 模拟导入失败，保住降级路径覆盖）。边界测试 35 个七切片
+  全打桩；全量纯逻辑 426 passed 无回归；Ruff 干净（`src/paper_rag/rag` 与本课
+  测试全绿；`arxiv_source.py` I001 与 `qdrant_store.py` B905 是本课未触碰文件的
+  预存问题，归属 `7d86734` 与用户未提交 diff，未顺带修）。
+- **`query_rewrite.py` 真实验收证据（2026-08-05，助手实跑）**：
+  `scripts/demo_query_rewrite.py` exit 0 —— 英文问走英文模板产出 3 变体 + HyDE
+  段落 + `bm25_query`；中文问 `检索增强生成怎么缓解大模型的幻觉问题?` 走中文模板，
+  keywords 真实混出 `检索增强生成 retrieval augmented generation RAG 幻觉
+  hallucination 事实性 faithful grounding 外部知识 external knowledge`（中英双语
+  断层跨越已实证），变体含 1 条英文改写，HyDE 为中文论文腔段落；逃生门置真时
+  LLM 调用计数 0；中文别名两形态均识别为 RAG。`tests/test_query_rewrite_real.py`
+  3 passed（无 mock，缺配置 `pytest.fail` 不 skip）——含真实模型下的双语 keywords
+  断言与"逃生门在真实环境下也一次不发"。落地后 pipeline 的 `identity rewrite`
+  warning 已实测消失。
+- **`query_rewrite.py` 已确认方案（2026-08-05 用户确认，已实现）**：基准英文隐式
   假设与中文扩展——a) prompt 单一英文模板且要求 lowercase keywords（对中文无
   意义）→ 新增 `_query_language(q)` 按 CJK 码位占比判 `zh/en`（查询侧无
   `meta.json` 可依赖，只能启发式），zh 走中文模板；b) **跨语言 BM25 断层**：
@@ -553,3 +583,4 @@
 - `a972bd8 feat(chunk): 多模态切块语言路由、layout 图注页码增强与表重定型`
 - `b07c363 docs(course): 记录切块层收官与嵌入课依赖顺序修正`
 - `a91a30b feat(embed): BGE-M3 稠密嵌入封装与中英同空间真实验收`
+- `92662d2 feat(rag): OpenAI 兼容 LLM 客户端与 Qwen extra_body 透传`（P7 第一课）

@@ -6,9 +6,9 @@
 
 ## 当前定位
 
-- 当前阶段：P1–P6 **已全部完成并收口**；当前阶段 **P7（RAG/QA 层）已开题**，
-  第一课 `rag/llm.py` 已完成真实验收（功能提交待用户执行），下一课
-  `rag/query_rewrite.py`（方案已确认，见下）。
+- 当前阶段：P1–P6 **已全部完成并收口**；当前阶段 **P7（RAG/QA 层）进行中**，
+  前两课 `rag/llm.py` ✅（`92662d2`）与 `rag/query_rewrite.py` ✅（真实验收通过，
+  功能提交待用户执行）均已完成，下一课 `rag/intent_classifier.py`（待开题）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -32,9 +32,9 @@
   UPDATE 不触发行数自愈；`_diversify_by_paper` 补位场景下单篇可合法超限额。
 - **P7 RAG/QA 层（进行中，2026-08-05 开题）**：依赖核对结论——`llm.py` 是 rag 层
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
-  `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite（下一课）**
-  → intent_classifier → evidence_select → abstain → reflect → citation_check →
-  qa_simple → qa_agentic → qa_stream。
+  `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
+  intent_classifier（下一课）** → evidence_select → abstain → reflect →
+  citation_check → qa_simple → qa_agentic → qa_stream。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
     `llm.extra_body` 透传**（Qwen 思考型模型非流式必须 `enable_thinking: false`
@@ -46,11 +46,22 @@
     一处流式（为 DeerFlow 前端 SSE），其余全非流式；异步是"全同步引擎 + 网关边界
     `anyio.to_thread.run_sync` 包装"。**结论**：非流式为主链路，流式推迟到
     `qa_stream` 课再定，异步推迟到网关阶段独立小课，不提前引入。
-  - **下一步 `rag/query_rewrite.py`**（方案已于开题确认，细节见归档"P7 逐课细节"）：
+  - `rag/query_rewrite.py` ✅（2026-08-05 真实验收通过，**功能提交待用户执行**）：
     zh/en 双 prompt 模板路由（`_query_language` 按 CJK 码位占比判定）、zh 的
-    keywords **中英双语混出**以跨越 BM25 词面断层、中文"原始/最早的 X 论文"别名
-    正则、修 `_aliases_for_title` 的 CJK 邻接词边界缺陷（中文标题内嵌拉丁缩写词
-    提取不到）。落地后 pipeline 的 `identity rewrite` warning 自动消失。
+    keywords **中英双语混出**以跨越 BM25 词面断层（真实模型已实证混出中英术语）、
+    中文"原始/最早的 X 论文"别名正则（`_original_aliases` 收敛三条正则）、修
+    `_aliases_for_title` 的 CJK 邻接词边界缺陷（基准正则在"基于GNN的图神经网络
+    建模"返回 `[]`，改显式 lookaround 后返回 `['GNN']`，英文侧边界不放宽）。
+    pipeline 的 `identity rewrite` warning 已实测消失；P6 的过渡测试
+    `test_identity_fallback_when_query_rewrite_missing` 按预期翻转为
+    `test_uses_real_query_rewrite_by_default` + 导入失败降级专测。证据：边界测试
+    35 passed、全量纯逻辑 426 passed、Ruff 干净、`scripts/demo_query_rewrite.py`
+    exit 0、`tests/test_query_rewrite_real.py` 3 passed。
+    **待用户执行的功能提交**：
+    `git add src/paper_rag/rag/query_rewrite.py tests/test_query_rewrite.py
+    tests/test_query_rewrite_real.py tests/test_retrieve_pipeline.py
+    scripts/demo_query_rewrite.py`；
+    message：`feat(rag): 查询改写与 HyDE 的中文语言路由与双语关键词(P7 第二课)`。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，

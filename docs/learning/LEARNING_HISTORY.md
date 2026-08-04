@@ -556,6 +556,31 @@
   `检索增强生成近年有哪些研究进展?` 去断言"无信号词时落 reasoning 默认档"，但该问
   句本身含 explore 信号词"有哪些/进展"，被启发式正确判为 explore 而 RED 失败。是
   测试写错而非实现错——改用无信号词的中性问句隔离被测行为。
+- **`evidence_select.py` 已确认方案与实现（2026-08-05 用户确认，已实现）**：基准
+  127 行纯函数，职责是把检索宽窗(intent 三档 5/10/15 块)确定性收敛为 ≤4 块可
+  引用证据(单篇 ≤2)——上下文纪律 + 引用面控制。打分四层：模型分键位优先链
+  (score_rerank > score_rrf > score_dense > score) 占大头、词面重叠 ×0.2 裁平局、
+  章节提示 ×0.03 微加分、1/rank ×0.001 兜底锚；trace 逐候选记账、落选也记。
+  两处中文扩展：a) **基准 `_TOKEN_RE = [a-z0-9]+` 对中文问题一个 token 都抽不出，
+  overlap 恒 0，平局裁决层对中文整体失明**（混排 "RAG 的召回率" 只抽出 rag，
+  重叠失真）→ token 化改为拉丁词 + CJK bigram 并集（口径与 FTS5 ADR-0001 一致，
+  问题侧与文本侧同一 `_tokens()` 函数；单字 CJK 组退化为单字 token）；
+  b) `_SECTION_HINTS` 全英文 → 增 摘要/引言/绪论/方法/实验/评估/结果/结论/总结。
+  保持基准：打分权重不进配置（算法常数非运维项）；`max_chunks=4, max_per_paper=2`
+  保留签名默认，配置化推迟到 qa_agentic 课由调用方决定；trace 的
+  `chunk in selected` 字典相等比较（同内容块会同标 selected 的理论边界）照抄记账。
+  **新记账边界**：单字 CJK 问题({图}) 与文本 bigram 集合({图神,神经,...})无交集、
+  overlap=0——与 P6 "bigram 索引无 unigram" 同口径，单字查询本就在词面盲区，由
+  稠密分兜底（专测钉死该行为并写明缘由）。RED 期自纠一处测试设计：原断言单字
+  问题 overlap>0，与 bigram 口径矛盾，改为断言 0 并记账。
+- **`evidence_select.py` 真实链路验收证据（2026-08-05，助手实跑，无 LLM 消耗）**：
+  `scripts/demo_evidence_select.py` exit 0——数据与 P6 retrieve_pipeline Demo 同源
+  （英文 Graph-Mamba 库副本 + 中文期刊 62 块），真实 BGE-M3 + embedded Qdrant +
+  FTS5 + 真实 reranker。英文问宽窗 8 → 选 2 块（窗口单篇故限额 2 生效），top-1
+  model=0.992/overlap=0.750/hint=1；中文问 top-1 **overlap=0.650 > 0**（CJK bigram
+  修复在真实数据上实证，选中块 section=摘要 亦吃到中文提示加分）；混合问单篇 ≤2；
+  同一窗口两遍选择选集与全部候选得分逐项一致（确定性）。边界测试 18 passed，
+  全量纯逻辑 481 passed，Ruff 干净。数据隔离在 `demo-evidence-select-data/`。
 
 ## 已关闭/已诊断问题的细节
 
@@ -632,3 +657,5 @@
 - `b07c363 docs(course): 记录切块层收官与嵌入课依赖顺序修正`
 - `a91a30b feat(embed): BGE-M3 稠密嵌入封装与中英同空间真实验收`
 - `92662d2 feat(rag): OpenAI 兼容 LLM 客户端与 Qwen extra_body 透传`（P7 第一课）
+- `46be7c3 feat(rag): 查询改写与 HyDE 的中文语言路由与双语关键词`（P7 第二课，含 conftest）
+- `762d353 feat(rag): 意图三档分类与配置化检索档位`（P7 第三课）

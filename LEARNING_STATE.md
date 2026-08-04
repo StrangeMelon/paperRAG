@@ -9,8 +9,8 @@
 - 当前阶段：P1–P6 **已全部完成并收口**；当前阶段 **P7（RAG/QA 层）进行中**，
   前三课 `rag/llm.py` ✅（`92662d2`）、`rag/query_rewrite.py` ✅（`46be7c3`，含
   `tests/conftest.py` 统一 `.env` 加载）与 `rag/intent_classifier.py` ✅
-  （2026-08-05 真实验收通过，**功能提交待用户执行**）均已完成，下一课
-  `rag/evidence_select.py`（待开题，纯函数课）。
+  （`762d353`）均已完成并提交；第四课 `rag/evidence_select.py` ✅（2026-08-05
+  真实链路验收通过，**功能提交待用户执行**）。下一课 `rag/abstain.py`（纯函数课）。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -35,7 +35,7 @@
 - **P7 RAG/QA 层（进行中，2026-08-05 开题）**：依赖核对结论——`llm.py` 是 rag 层
   依赖图的根（`query_rewrite` 顶层 `from .llm import chat`），故第一课由原定
   `query_rewrite` 改为 `llm.py`；修正后顺序：**llm ✅ → query_rewrite ✅ →
-  intent_classifier ✅ → evidence_select（下一课）** → abstain → reflect →
+  intent_classifier ✅ → evidence_select ✅ → abstain（下一课）** → reflect →
   citation_check → qa_simple → qa_agentic → qa_stream。
   - `rag/llm.py` ✅ `92662d2`（2026-08-05 真实验收通过）：
     模块级单例 + 同步非流式 `chat()`，与基准逐参一致；**一处确认偏离
@@ -66,7 +66,7 @@
     . ./.env` 掩盖了缺陷）。改为 conftest 统一 `load_dotenv(override=False)`，所有
     真实测试自动受益、不必各自复制。**教训已归档：真实验收命令交付前必须在
     `env -u VAR ...` 剥离变量的干净 shell 里复跑一遍。**
-  - `rag/intent_classifier.py` ✅（2026-08-05 真实验收通过，**功能提交待用户执行**）：
+  - `rag/intent_classifier.py` ✅（2026-08-05 真实验收通过，已提交 `762d353`）：
     一次 LLM 调用把问题判为 factual / reasoning / explore 三档，输出
     `{intent, top_k, max_iter, rrf_k}` 驱动后续检索力度（基准 `qa_agentic`/
     `qa_stream` 均消费它）。**永不抛异常**——LLM 挂、JSON 坏、未知 intent 名统统
@@ -79,6 +79,22 @@
     37 passed、全量纯逻辑 463 passed、Ruff 干净、`scripts/demo_intent_classifier.py`
     exit 0（真实 Qwen 中英 **6/6 全判对**）、`tests/test_intent_classifier_real.py`
     8 passed（均在 `env -u` 干净 shell 复跑）。
+  - `rag/evidence_select.py` ✅（2026-08-05 真实链路验收通过，**功能提交待用户
+    执行**）：从检索宽窗(5/10/15 块)确定性挑出 ≤4 块可引用证据(单篇 ≤2)，
+    纯打分排序不调 LLM——模型分占大头、词面重叠裁平局、章节提示微加分、原始
+    排名兜底；trace 逐候选记账四项得分。两处中文扩展：a) **词面重叠 token 化
+    从 `[a-z0-9]+` 改为拉丁词 + CJK bigram 并集**（基准对中文问题 overlap 恒 0，
+    平局裁决层整体失明；bigram 口径与 ADR-0001 一致）；b) `_SECTION_HINTS` 增
+    中文条目（摘要/引言/方法/实验/结果/结论等）。已记账边界：单字 CJK 问题与
+    文本 bigram 无交集、overlap=0（与 P6 "bigram 无 unigram" 同口径，由稠密分
+    兜底）。权重与签名默认照抄基准，配置化推迟到 qa_agentic 课。证据：边界
+    测试 18 passed、全量纯逻辑 481 passed、Ruff 干净、
+    `scripts/demo_evidence_select.py` exit 0（真实检索链路：英文 overlap 0.750、
+    中文 overlap 0.650 > 0 修复实证、单篇限额、两遍逐项一致）。
+    **待用户执行的功能提交**：
+    `git add src/paper_rag/rag/evidence_select.py tests/test_evidence_select.py
+    scripts/demo_evidence_select.py`；
+    message：`feat(rag): 确定性证据选择与 CJK bigram 词面重叠(P7 第四课)`。
   - **功能提交已由用户执行**：`92662d2`（8 files / +550，含 `rag/__init__.py`、
     `rag/llm.py`、`config.py`、`config/default.yaml`、两个测试、demo、
     `.env.example`）。`arxiv_source.py` 遗留 diff 与三个未跟踪文件仍留在工作区，

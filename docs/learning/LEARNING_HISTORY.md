@@ -895,6 +895,54 @@
   测试加固两文件待用户补提交。`data/index/vision_cache/` 属运行时产物已被
   gitignore 覆盖。
 
+## Wiki 自演化概念库逐课细节（2026-08-06，14 课一次交付）
+
+- **课程定位**：用户在批量入库之外提出的新需求，一次交付整个 wiki 模块。
+  交付粒度按 vision 课先例并由用户明确确认：整模块连续 TDD、不逐文件确认、
+  **每个文件测试通过才动下一个**，最后交一个专用真实 Demo。
+- **基准的四个真实缺陷（本课全部修正，非风格偏好）**：
+  1. `find_match` 全表扫描 `list_all` 做名字匹配——20k 篇 / 千级词条规模不可
+     接受。改为 `wiki_labels.text_norm` 索引查询，且**没有任何代码从名字反推
+     `entry_id`**（创建时生成一次，之后是不可反推的稳定句柄）。
+  2. 进程内 daemon 线程队列——CLI 进程退出即丢任务。改为 SQLite `wiki_jobs`
+     持久化队列 + `scripts/wiki_worker.py`，含指纹幂等、退避重试、
+     `requeue_stale` 归还崩溃残留的 `processing`（断点续跑）。
+  3. **24h 锁锁整条词条**——批量入库时同概念的后续论文关联会被整条丢弃。
+     改为锁只限制昂贵的 `propose_definition`，关系新增（论文/证据/标签）不受限。
+  4. `_definition_phrases` 用 `[A-Za-z]` 正则——中文定义一个短语都抽不出来，
+     改写提示对中文词条完全失效。增 CJK 分支 + 中文停用词表。
+- **身份与语言分档**：`normalize_label` 走 NFKC + casefold 并剔除空白/标点，
+  CJK 原样保留（中文概念名是一等公民，非英文降级路径）；短标签按语言分档——
+  ASCII ≤4 字符（RL/CL/GAN/BERT）不许单独触发自动合并，中文只有单字才算短
+  （"蒸馏"两字已是完整概念）。
+- **三级解析**：向量只负责召回（`recall_floor=0.60`），合并判定权在 LLM 验证；
+  同语言且 ≥`auto_merge_same_lang=0.90` 才免验证直接 match，其余进 LLM，
+  不确定则入 `review_queue` 而不是猜——**误合并不可逆，复核可等**。
+- **TDD 轨迹**：schema(9) → store(13) → normalize(10) → consistency(7) →
+  queue(7) → worker(6) → concept_extractor(8) → flow(4) → triggers(9) →
+  ingest 钩子改造 → context(11+1) → review_queue(6)+usage(5) → init_store(+1)
+  → Demo。每文件先 RED 后 GREEN，全程无跳步。
+- **真实 Demo 抓到的设计冲突（纯逻辑测试抓不到）**：建条 prompt 要求定义内引用
+  `[chunk:xx]` 以保证 grounding，而这些定义原样进 QA 背景块——那些 id 属于词条
+  历史证据、**不是本轮检索结果**，会诱导模型照抄成伪引用，直接冲击"答案只能
+  引用检索到的 chunk"。修在消费端 `_entry_to_context` 剥离；随后发现自己写的
+  背景块表头 "cite only retrieved `[chunk:<id>]`" 本身含该字面，写出格式样例
+  同样会被照抄，故改表头措辞。补了纯逻辑测试钉死"背景块内 `[chunk:` 零出现"。
+  已写入 ADR-0003 第 9 节。
+- **真实 Demo 结果**（`scripts/demo_wiki.py`，真实 LLM + 真实 BGE-M3 +
+  embedded Qdrant + 真实 SQLite，11 条断言全过）：英文 Graph-Mamba 抽 5 概念
+  建 5 条；中文期刊并入同一概念只加版本、不产第二条；中文名经 labels 表精确
+  命中英文词条；REINFORCE 与"逆强化学习"均判 novel 未误并；征文通知
+  （`mineru+broken` / 7 chunks）记 `skipped` 且零词条；旧 ID 查询跟随重定向；
+  worker 断点续跑归还任务；Qdrant 脏标补偿同步；QA 改写提示含英文别名、
+  背景块无伪引用、消费行落库。共建出 9 条词条。
+- **自查**：`uv run python -m pytest` 813 passed；2 个失败是既有 opt-in 真实
+  PDF 测试（缺 `PAPER_RAG_REAL_*_PDF`，与 wiki 无关）。Ruff 在 wiki 全部改动
+  路径干净；全量 4 个错误全在既有文件（`qdrant_store.py` 历史遗留 +
+  不可碰的 `arxiv_source.py` Task 6 diff），按约定不顺带清理。
+- **纯逻辑测试的隔离**：`wiki.enabled=true` 但所有 wiki 测试按 vision 先例
+  （`70de121`）钉死配置并打桩 LLM/嵌入，零真实调用、零网络。
+
 ## 已关闭/已诊断问题的细节
 
 - **arXiv 真实端点不稳定（2026-07-31 诊断，待修复）**：

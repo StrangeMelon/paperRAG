@@ -10,10 +10,12 @@
 - 只读基准：`/home/user_kyh/paper-rag-agent-main`，不得写入新代码。
 - **P1-P7 核心后端已全部完成并收口**：采集、解析、切块、嵌入与入库、检索、
   RAG/QA 均已建成；`ask`、单篇/批量入库 CLI 和 Vision 视觉增强也已完成。
-- 当前处于**正式语料批量入库与后续能力选题阶段**。用户已用 `--limit 3` 在正式库
-  成功试入三篇中文 PDF；唯一既定操作是移除 `--limit` 后继续全量批跑。批跑支持
-  断点续传，可分多晚完成。
-- 全量入库完成后的候选课程：**元数据补全**、**评测层**、**入库质量清单**。
+- **Wiki 自演化概念库（14 课）已全部完成**，含真实全链路 Demo 验收。这是用户
+  在批量入库之外提出的新需求，按整体交付模式实现（不逐文件确认，但每个文件
+  测试通过才进入下一课）。
+- 未完成的既定操作仍在：移除 `--limit` 后对正式语料全量批跑，支持断点续传、
+  可分多晚完成。
+- 后续候选课程：**元数据补全**、**评测层**、**入库质量清单**。
   用户提出明确的新需求时，以新需求决定下一课，不擅自插入遗留问题。
 
 ## 已完成能力
@@ -34,6 +36,15 @@
   逐篇异常隔离、JSON 报告和幂等续跑。CLI 会自行加载 `.env` 且不覆盖已导出变量。
 - **Vision**：图表视觉摘要已接入 builder/ingest，支持中英文提示词、语言相关缓存键、
   失败不入索引与缓存幂等；生产模型为 GLM-4.6V，`vision.enabled=true`。
+- **Wiki 自演化概念库**：`schema`（NFKC+casefold 规范化、稳定 `concept:<规范名>`
+  身份、CJK 分档短标签）、`store`（8 张表、`labels` 索引查找、`merged_into`
+  重定向与合并、Qdrant 脏标补偿）、`normalize`（向量召回 + LLM 验证的三级解析
+  match/novel/review）、`consistency`（定义长度按语言分档）、`queue`（`wiki_jobs`
+  持久化队列、指纹幂等、退避重试、`requeue_stale` 断点续跑）、`concept_extractor`
+  （排除参考文献的位置采样、中英 prompt）、`flow`（白名单操作、self_eval 门槛、
+  锁只限定义重写）、`triggers`（编排 + 解析质量门槛）、`context`（QA 只读背景、
+  CJK 短语抽取、剥离伪引用）、`review_queue` + `usage`（复核合并与消费记录）；
+  `scripts/wiki_worker.py` 支持 `--once/--drain`，`scripts/init_store.py` 显式建表。
 
 ## 当前运行检查点
 
@@ -49,6 +60,12 @@
 - 元数据补全已约定为独立课程，递进方案是：首页抽 arXiv/DOI 查权威源 -> 标题模糊
   搜索并做相似度校验 -> 中文首页结构化解析与 LLM 兜底。Semantic Scholar 标题
   搜索前还需增加 `/paper/search` 方法。
+- Wiki 真实 Demo（`scripts/demo_wiki.py`）11 条断言全过，用真实 LLM 从英文
+  Graph-Mamba 与中文期刊两篇建出 9 条词条；`wiki.enabled=true` 但纯逻辑测试
+  已按 vision 先例（`70de121`）钉死配置，零真实 LLM 调用。
+- 三级解析阈值 `recall_floor=0.60` / `auto_merge_same_lang=0.90` 已在 Demo 用
+  中英同概念对与近义反例实测：中文"强化学习"命中英文词条，REINFORCE 与
+  "逆强化学习"均判 novel 未误并。阈值偏移只多走几次 LLM 验证，不产生错误合并。
 
 ## 关键提交索引
 
@@ -61,6 +78,8 @@
   `cfe67fd` + `9175749`；qa_stream `e976dc2`；ADR-0002 `c8d109a`。
 - CLI：ask `cb4f414`；单篇/批量入库 `dd40519`。
 - Vision：功能 `1f37a10`；课程记录 `434cfb5`；纯逻辑测试隔离 `70de121`。
+- Wiki：14 课整体交付，功能文件待用户提交（清单见课程收尾说明）；
+  设计决策见 `docs/adrs/0003-wiki-concept-identity.md`。
 - 更早阶段的逐文件提交和验收证据见 `docs/learning/LEARNING_HISTORY.md`。
 
 ## 必须保留的设计约束
@@ -88,6 +107,13 @@
   时 fail open，并通过 `signal_quality` 暴露降级状态。
 - CJK 词面匹配采用 bigram，与 ADR-0001/0002 一致；单字查询没有 unigram 命中，
   由稠密检索兜底。FTS5 原地 UPDATE 行数自愈和多样化补位超单篇限额仍是已知边界。
+- **Wiki 证据边界**：wiki 只提供背景，绝不作为答案证据。词条定义里的
+  `[chunk:xx]`（建条 grounding 用）在进 QA 上下文时必须剥离，背景块内该字面零
+  出现——含表头措辞，写出格式样例同样会被模型照抄成伪引用（ADR-0003 第 9 节）。
+- **Wiki 只追加不删除**：`entry_id` 创建后永不重算，查找一律走 `wiki_labels`
+  索引，没有任何代码从名字反推 ID；合并走 `merged_into` 重定向且源条目保留为
+  tombstone；LLM 只能返回白名单操作。24h 锁只限制 `propose_definition`，
+  论文/证据/标签的关系新增不受限（否则批量入库会丢关联）。
 
 ## 待处理问题
 
@@ -105,6 +131,10 @@
   后续课只检查改动路径，不顺带清理。
 - `data/`、`demo-*-data/`、PDF、模型、数据库与 `.env` 都是运行产物或秘密，不提交、
   不删除。
+- Wiki 已知边界：`context.resolve_wiki_context` 仍是每问一次的内存遍历（千级词条
+  可接受，万级需改标签表反向索引）；`review_queue` 只有 API 无 Web UI；词条自动
+  GC / 归并建议与跨概念关系图谱未做。`wiki_worker` 需常驻或定时触发，目前靠手动
+  `--drain`，接入调度是独立选题。
 
 ## 协作规则
 
@@ -113,9 +143,11 @@
 - Git 分工：仅 `LEARNING_STATE.md` 与 `docs/learning/LEARNING_HISTORY.md` 由助手用
   独立 `docs(course)` 提交；所有功能、测试、配置和 Demo 文件由用户提交。助手收尾
   时提供精确 `git add` 清单和 Conventional Commit message。
-- 每次只讲解和实现一个项目文件，测试可先作为该文件的验收契约。新模块开始前必须
-  先讲“为什么需要、承担什么职责”，再讲“怎么实现、基准有哪些英文假设、中文如何
-  扩展”；方案经用户确认后才写代码。
+- 新模块开始前必须先讲“为什么需要、承担什么职责”，再讲“怎么实现、基准有哪些
+  英文假设、中文如何扩展”；**整体方案**经用户确认后才写代码。
+- **交付粒度（wiki 课起变更）**：方案确认后助手连续完成整个模块的编写、测试与
+  真实验收，不再逐文件等用户确认；但仍是 TDD，且**每个文件必须测试通过才能进入
+  下一个文件**。模块收尾时一次性给出验收命令、预期输出与提交清单。
 - 代码完成后，最终测试和真实 Demo 由用户亲自运行。助手先给出命令、预期输出和关键
   不变量，再根据用户实跑结果对比收口。
 - 新包必须同时纳入 `__init__.py`。提交前用 `git archive HEAD` 解包到 `/tmp` 后运行

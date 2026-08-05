@@ -179,6 +179,13 @@ class _Vision(BaseModel):
     api_key: str | None = None
     model: str | None = None
     timeout_sec: int = 60
+    # 智谱(GLM-4.6V)OpenAI 兼容口径: temperature 区间为 (0,1) 开区间, 0 不适用,
+    # 故不照抄基准 api.py 写死的 temperature=0。
+    temperature: float = Field(default=0.01, gt=0.0, lt=1.0)
+    # OpenAI 兼容供应商私有参数, 非空时透传给 chat.completions.create。
+    # GLM-V 属思考型系列, 若吐 reasoning_content 或报 400 则填
+    # {"thinking": {"type": "disabled"}}。
+    extra_body: dict[str, Any] = Field(default_factory=dict)
     fallback_local: bool = False
     local_model: str = "Qwen/Qwen2.5-VL-7B-Instruct"
     local_max_new_tokens: int = Field(default=256, ge=1, le=700)

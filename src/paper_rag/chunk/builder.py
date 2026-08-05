@@ -193,6 +193,7 @@ def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[d
 
                 asset_name = Path(mmc.asset_rel_path).name if mmc.asset_rel_path else ""
                 asset = layout_assets.get(asset_name)
+                caption = mmc.alt or ""
                 if asset is not None:
                     if asset["page"] is not None:
                         page = asset["page"]  # 图块自身页码比标记回扫准(纯图表页无标记)
@@ -210,6 +211,11 @@ def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[d
                     "chunk_ordinal": j,
                     "element_type": modality,
                 }
+                if modality in ("figure", "table"):
+                    # vision 正门原料: 图注与邻近上下文直接交接, 不让下游反解 chunk 文本
+                    # (表块模板是 "表:\n{content}", 同行反解取不到图注)。
+                    mm_metadata["caption"] = caption
+                    mm_metadata["surrounding_context"] = mmc.context or ""
                 if is_references:
                     mm_metadata["is_references"] = True
                 chunks.append(
@@ -240,7 +246,7 @@ def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[d
     try:
         from paper_rag.vision.enrich import enrich_chunks
 
-        chunks = enrich_chunks(paper_id, chunks)
+        chunks = enrich_chunks(paper_id, chunks, language=language)
     except Exception as exc:
         log.warning(f"visual enrichment skipped for {paper_id}: {exc}")
 

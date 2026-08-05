@@ -98,12 +98,15 @@ llm:
                               # Qwen thinking models need {enable_thinking: false} for non-streaming
 
 vision:
-  enabled: false
+  enabled: true
   provider: openai_compatible
   base_url: $VISION_BASE_URL
   api_key: $VISION_API_KEY
   model: $VISION_MODEL
   timeout_sec: 60
+  temperature: 0.01          # ZhipuAI/GLM accepts temperature in (0,1) only; 0 is rejected
+  extra_body:                # GLM-4.6V defaults to thinking; reasoning can eat max_tokens
+    thinking: {type: disabled}  # leaving content empty/truncated (verified 2026-08-05)
   fallback_local: false
   local_model: Qwen/Qwen2.5-VL-7B-Instruct
   local_max_new_tokens: 256

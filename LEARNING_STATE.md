@@ -69,6 +69,24 @@
   非论文文档被质量打分如实标记, 行为正确; 提示用户文件夹可能混有非论文
   PDF, 全量后可按 parsed_with 清查)。**下一步: 用户放全量批跑**(断点续跑
   可分多晚); 全量完成后下一课候选: 元数据补全 / 评测层 / 入库质量清单。
+- **Vision 视觉增强 ✅（2026-08-05 用户真实验收通过，功能已提交 `1f37a10`，
+  18 files / +2035）**：五文件(schema/cache/api/local/enrich) + builder
+  metadata 正门补料 + 语言贯通(read_language → 双语提示词 → 缓存键含
+  language → 追加行 `视觉摘要:`/`Visual summary:`)，PROMPT_VERSION v2；
+  生产模型智谱 **GLM-4.6V**。三处 GLM 兼容定夺：`vision.temperature=0.01`
+  (智谱 (0,1) 开区间, 基准写死 0 会被拒)、`vision.extra_body` 默认
+  `{thinking: {type: disabled}}`(默认思考的 reasoning 计入 max_tokens 且跨
+  调用波动, 实测吃光 700 预算致 content 空/截断——关思考后三连发稳定)、
+  api.py 输出净化(空正文记诊断 error、截断 JSON 判 failed 不进索引)。
+  验收 Demo `scripts/demo_vision_enrich.py`(同批 chunk 深拷贝快照 →
+  真调 → 逐块 diff context_text; 中英各一篇, 二跑全 cached)。
+  **用户已把 `vision.enabled` 翻 true——生产 ingest 从此自动增强图表**
+  (成本护栏 max_images_per_paper=40, 缓存幂等)。连带修复: enabled=true +
+  真凭据让纯逻辑测试隐性触网, `tests/test_vision_enrich.py` 钉配置 stub、
+  `tests/test_builder.py` 加 autouse 恒等桩; 排除 `*_real*` 全量
+  690 passed。**该两个测试文件的加固改动待用户补提交**, 建议 message
+  `test(vision): 纯逻辑测试钉死 vision 配置避免隐性真实调用`。
+  三次真实翻车的完整实据链见归档"Vision 视觉增强逐课细节"。
 - 解析阶段已于 2026-07-31 全部完成（真实 GPU 双语 OCR 验收 + 可复现性缺口补提交，
   细节见归档）。
 - 切块进度（**7 个文件全部完成**）：`section_splitter.py` ✅（`5caefcb`）；
@@ -522,11 +540,11 @@ Scholar 缺 API key 先跳过，不算完整 checkpoint，最终后端验收前�
   （用户用通义千问 DashScope 兼容模式，2026-08-05 实测 `qwen3.8-max` +
   `qwen3.7-flash`）。`.env` 被 gitignore；模板见已跟踪的 `.env.example`。
   Qwen 思考型模型非流式调用需在配置加 `llm.extra_body: {enable_thinking: false}`。
-- `vision/` 模块推迟到核心 RAG 链（嵌入→存储→检索→QA）跑通之后（2026-08-01
-  与用户确认）：基准默认 `vision.enabled: false`，builder 钩子已接回、行为与
-  基准默认态等价，仅多一行 warning 诚实信号。届时真实验收需要
-  `VISION_BASE_URL`/`VISION_API_KEY` 或本地视觉模型（GPU），且 QA 跑通后才能
-  真实对比"带视觉摘要 vs 只有图注"的检索差异。
+- ~~`vision/` 模块推迟到核心 RAG 链跑通之后~~ **已兑现并收口（2026-08-05）**：
+  真实验收走通(GLM-4.6V), `vision.enabled` 已由用户翻 true, 生产 ingest 自动
+  增强。仍推迟: `local.py` 本地兜底(Qwen2.5-VL)的真实 GPU 验收(默认
+  `fallback_local: false`, 结构已建、依赖缺失返回 unavailable 有专测);
+  "带视觉摘要 vs 只有图注"的检索差异对比归入评测层课。
 - 全量测试须用 `uv run python -m pytest`（把工作目录纳入 sys.path），否则
   `scripts.init_store` 用例导入失败。真实测试缺服务/密钥时按约定明确失败不 skip，
   需单独运行。全量 Ruff 的既有历史问题位于 `scripts/demo_qdrant_store.py`、

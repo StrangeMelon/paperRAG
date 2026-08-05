@@ -852,6 +852,49 @@
   **用户正式批量入库待执行**(默认配置即指向其运行中的 Qdrant 服务与正式
   data/, 无需改配置; 流程 --dry-run → --limit 3 → 全量)。
 
+## Vision 视觉增强逐课细节（2026-08-05，五文件一次课完成）
+
+- **课程定位**：P1–P7 + CLI 收口后兑现"vision 推迟到核心 RAG 跑通"的记账项。
+  用户提出 8 条方案与助手方案对比合并：分歧仅在取料方式——最终**metadata
+  正门为主路**（builder 把 layout 图注 + `mmc.context` 写进 figure/table 块的
+  `metadata.caption/surrounding_context`，基准留了正门但无生产方写入；论据：
+  表块模板 `表:\n{content}` 令基准的同行反解恒空，而 OCR 模式下表格全是图片、
+  占比最高的资产恰好失效，且空 caption 会污染缓存键经济学），**双语前缀文本
+  反解为兜底**（zh/en/None 路由、半/全角冒号、表块下一行取值修复）。
+  `key_entities` 保留原文形态（ResNet/ImageNet/BLEU 不译，query_rewrite
+  双语过桥的语料侧镜像）。本课起验收模式改为"整模块连续 TDD, 无逐文件
+  用户确认, 但每文件测试通过才动下一个"。
+- **GLM-4.6V 兼容核查（联网核实官方文档）**：OpenAI 兼容端点
+  `open.bigmodel.cn/api/paas/v4/`；图片 base64 data URL 与基准一致；
+  **temperature 为 (0,1) 开区间, 基准写死的 0 会被拒** → 新配置
+  `vision.temperature`(默认 0.01)；思考开关 `thinking: {type: disabled}` 经
+  `vision.extra_body` 透传（llm 课先例）。
+- **TDD 轨迹**：schema(7) → cache(9) → api(17+4) → local(4) → enrich(25) →
+  builder 交接(6) → api_real(4, 缺凭据明确 skip)。语言贯通四处：
+  `read_language` → 双语提示词/字段标签/请求标签 → 缓存键含 language →
+  追加行 `视觉摘要:`/`Visual summary:`。`PROMPT_VERSION` v2。加固三处基准外
+  行为：cache 未知键历史文件返回 None 不炸穿；失败路径也记 provider/model；
+  formula/text 块逐字节不变有专测。
+- **三次真实翻车与修复（全部有实据）**：
+  1) 用户首跑 Demo 0/6 全部"未记账"——Demo 未注入 summarizer，落进
+     `enabled=false` 静默早退分支。修复：Demo 显式构造 summarizer 注入。
+     教训：助手自查用注入路径，掩盖了缺省构造路径（与 conftest .env 教训
+     同族：自查环境与用户实跑环境的差异处即缺陷藏身处）。
+  2) LocAgent 第二图间歇 failed 且**无 error 行**（空正文特征）。原始 API
+     复现抓到 `finish=length, reasoning_tokens=612/700`：GLM-4.6V 默认思考，
+     reasoning 计入 max_tokens 且跨调用波动（reflect 课 DashScope 不可复现
+     现象同族）。修复：默认配置关思考（实测三连发 reasoning=0 全 stop 稳定
+     ~230 token）；api.py 输出净化——空正文记诊断 error、截断 JSON
+     (`finish=length` 的半截 `{...`)判 failed 不进索引。复跑英文 3/3 ok。
+  3) 用户验收后把 `vision.enabled` 翻 true（生产 ingest 自动增强），连带
+     纯逻辑测试真打 API：`test_disabled_config_*` 直接翻车、`test_builder.py`
+     经钩子隐性触网。修复：enrich 测试用 `_stub_vision_cfg` 钉配置（不依赖
+     环境），test_builder 加 autouse 恒等桩（钩子契约归 handoff 专测）。
+     排除 `*_real*` 全量 690 passed(17.5s 无网络)。
+- **提交**：功能 `1f37a10`（18 files / +2035，用户执行，含 enabled=true）；
+  测试加固两文件待用户补提交。`data/index/vision_cache/` 属运行时产物已被
+  gitignore 覆盖。
+
 ## 已关闭/已诊断问题的细节
 
 - **arXiv 真实端点不稳定（2026-07-31 诊断，待修复）**：
@@ -930,3 +973,6 @@
 - `46be7c3 feat(rag): 查询改写与 HyDE 的中文语言路由与双语关键词`（P7 第二课，含 conftest）
 - `762d353 feat(rag): 意图三档分类与配置化检索档位`（P7 第三课）
 - `83b9d30 feat(rag): 确定性证据选择与 CJK bigram 词面重叠`（P7 第四课；ADR-0002 漏纳入，待补提交）
+- `1f37a10 feat(vision): add bilingual figure/table summarization with GLM-4.6V compatibility`
+  （vision 课，18 files / +2035；后续两次真实翻车修复与测试加固见"Vision
+  视觉增强逐课细节"）

@@ -254,7 +254,43 @@ def test_summarizer_exception_does_not_break_ingest(png):
     assert "network down" in chunk["metadata"]["visual_summary_error"]
 
 
-def test_disabled_config_without_injection_returns_chunks_untouched(png):
+def _stub_vision_cfg(monkeypatch, **over) -> None:
+    """钉住 vision 配置, 不依赖环境——生产配置已 enabled=true 且凭据在场,
+    纯逻辑测试若读环境配置会真打 API(2026-08-05 用户开启生产增强后实翻车)。"""
+    from types import SimpleNamespace
+
+    base = {
+        "enabled": False,
+        "base_url": None,
+        "api_key": None,
+        "model": None,
+        "timeout_sec": 60,
+        "temperature": 0.01,
+        "extra_body": {},
+        "fallback_local": False,
+        "local_model": "stub",
+        "cache": False,
+        "cache_dir": "unused",
+        "max_images_per_paper": 40,
+        "max_image_bytes": 8_000_000,
+    }
+    base.update(over)
+    stub = SimpleNamespace(vision=SimpleNamespace(**base))
+    monkeypatch.setattr(en.cfg, "load", lambda: stub)
+
+
+def test_disabled_config_without_injection_returns_chunks_untouched(png, monkeypatch):
+    _stub_vision_cfg(monkeypatch, enabled=False)
+    chunk = _chunk(png)
+    before = chunk["text"]
+    out = en.enrich_chunks("p1", [chunk])
+    assert out[0]["text"] == before
+    assert chunk["metadata"] == {}
+
+
+def test_enabled_config_with_missing_credentials_skips_untouched(png, monkeypatch):
+    # enabled=true 但凭据不全: 打 warning 后原样返回, 不得半途构造 summarizer。
+    _stub_vision_cfg(monkeypatch, enabled=True, base_url="https://x", api_key=None, model="m")
     chunk = _chunk(png)
     before = chunk["text"]
     out = en.enrich_chunks("p1", [chunk])

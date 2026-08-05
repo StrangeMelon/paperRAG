@@ -25,8 +25,22 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 import paper_rag.config as config
 from paper_rag.chunk.builder import build_chunks
+
+
+@pytest.fixture(autouse=True)
+def _no_real_vision(monkeypatch):
+    """钉死 vision 钩子为恒等: 本文件只测 builder 本身。
+
+    生产配置 vision.enabled=true 且凭据在 .env 时, 缺省构造会让纯逻辑测试
+    真打视觉 API(2026-08-05 实翻车); 钩子契约由 test_builder_vision_handoff 专测。
+    """
+    import paper_rag.vision.enrich as en
+
+    monkeypatch.setattr(en, "enrich_chunks", lambda paper_id, chunks, **kw: chunks)
 
 
 def _write_parsed(tmp_path: Path, md: str, language: str | None = None) -> Path:

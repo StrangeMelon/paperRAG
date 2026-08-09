@@ -90,7 +90,14 @@ dev = [
 ]
 # Convenience meta-extra: install everything needed to actually run a server.
 full = [
-    "paper-rag[embed,ingest,deliver,deliver-pdf,proactive,deerflow]",
+    "paper-rag[embed,ingest,deliver,deliver-pdf,proactive,deerflow,mcp]",
+]
+# FastMCP v1 API. The current 1.28 line requires Pydantic >=2.11, which conflicts
+# with the optional MinerU dependency's Pydantic <2.11 constraint; 1.10 remains
+# protocol-compatible with langchain-mcp-adapters and keeps all project extras solvable.
+mcp = [
+    "mcp>=1.10,<1.11",
+    "langchain-mcp-adapters>=0.1,<0.2",
 ]
 
 [project.urls]
@@ -99,6 +106,9 @@ Repository = "https://github.com/Ttttt-s/paper-rag-agent"
 Documentation = "https://github.com/Ttttt-s/paper-rag-agent/tree/main/docs"
 Changelog = "https://github.com/Ttttt-s/paper-rag-agent/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/Ttttt-s/paper-rag-agent/issues"
+
+[project.scripts]
+paper-rag-mcp = "paper_rag.mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -147,6 +157,7 @@ known-first-party = ["paper_rag"]
 minversion = "8.0"
 addopts = ["-ra", "--strict-markers", "--tb=short"]
 testpaths = ["tests"]
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 filterwarnings = [

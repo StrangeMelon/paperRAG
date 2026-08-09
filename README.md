@@ -15,3 +15,28 @@ uv sync --extra dev
 运行测试：
 
 uv run pytest -q
+```
+
+## MCP Server
+
+Install the MCP extra and run the stdio server:
+
+```bash
+uv run --extra mcp paper-rag-mcp
+```
+
+The default profile exposes `paper_retrieve_evidence`; use `--profile admin` for
+the admin-only retrieval trace tool. LangChain MCP adapters can discover it with:
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+client = MultiServerMCPClient({
+    "paper-rag": {
+        "transport": "stdio",
+        "command": "uv",
+        "args": ["run", "--extra", "mcp", "paper-rag-mcp"],
+    }
+})
+tools = await client.get_tools()
+```

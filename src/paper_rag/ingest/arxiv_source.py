@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ..utils.ids import make_paper_id, normalize_arxiv, split_arxiv_version
 from ..utils.logger import get_logger
 from ..utils.paths import paper_dir
+from .metadata import persist_paper_meta
 from .schema import FetchResult, PaperMeta
 from .sources import PaperSource
 
@@ -84,7 +84,7 @@ class ArxivSource(PaperSource):
             ),
         )
 
-        _persist_meta(
+        meta = _persist_meta(
             target=target,
             meta=meta,
             source_query=identifier,
@@ -135,19 +135,14 @@ def _persist_meta(
     target: Path,
     meta: PaperMeta,
     source_query: str,
-) -> None:
+) -> PaperMeta:
     """持久化标准化元数据和原始采集参数。"""
 
-    (target / "meta.json").write_text(
-        json.dumps(
-            meta.model_dump(mode="json"),
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    meta = persist_paper_meta(target, meta)
 
     (target / "source.txt").write_text(
         f"source={meta.source}\nquery={source_query}\n",
         encoding="utf-8",
     )
+
+    return meta

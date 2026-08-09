@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import sys
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 from paper_rag.retrieve import rerank as rr
@@ -89,6 +91,24 @@ def test_load_failed_latch_never_retries(monkeypatch):
     assert rr._model() is None  # 闩锁生效: 不再尝试 import/加载
 
 
+def test_model_disables_fp16_without_cuda(monkeypatch):
+    _conf(monkeypatch)
+    calls: list[dict] = []
+
+    class FakeReranker:
+        def __init__(self, *args, **kwargs):
+            calls.append(kwargs)
+
+    fake_flag = SimpleNamespace(FlagReranker=FakeReranker)
+    fake_torch = SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False))
+    monkeypatch.setitem(sys.modules, "FlagEmbedding", fake_flag)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    rr._model()
+
+    assert calls and calls[0]["use_fp16"] is False
+
+
 # ---------- 切片 1: 重排语义 ----------
 
 
@@ -132,3 +152,21 @@ def test_inputs_not_mutated(monkeypatch):
     assert [h["chunk_id"] for h in cands] == ["c0", "c1", "c2"]  # 基准会被原地重排
     assert all("score_rerank" not in h for h in cands)  # 基准会被写入新键
     assert out is not cands
+
+
+def test_rerank_holds_resource_during_model_execution(monkeypatch):
+    _conf(monkeypatch, top_k=1)
+    _stub_model(monkeypatch, [0.8])
+    events: list[str] = []
+
+    @contextmanager
+    def guard(name: str):
+        events.append(f"enter:{name}")
+        yield
+        events.append(f"exit:{name}")
+
+    monkeypatch.setattr(rr, "hold_resource", guard)
+
+    rr.rerank("q", _cands(1))
+
+    assert events == ["enter:reranker", "exit:reranker"]

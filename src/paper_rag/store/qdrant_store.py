@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import hashlib
 from collections.abc import Iterable
+from threading import Lock
 from typing import Any
 
 from .. import config as cfg
@@ -14,6 +15,7 @@ log = get_logger(__name__)
 
 _CLIENT: Any | None = None
 _ATEXIT_REGISTERED = False
+_CLIENT_LOCK = Lock()
 
 
 def close_client() -> None:
@@ -37,26 +39,28 @@ def get_client() -> Any:
     global _CLIENT, _ATEXIT_REGISTERED
 
     if _CLIENT is None:
-        from qdrant_client import QdrantClient
+        with _CLIENT_LOCK:
+            if _CLIENT is None:
+                from qdrant_client import QdrantClient
 
-        qdrant_config = cfg.load().qdrant
-        local_path = getattr(qdrant_config, "local_path", None)
-        url = qdrant_config.url or ""
+                qdrant_config = cfg.load().qdrant
+                local_path = getattr(qdrant_config, "local_path", None)
+                url = qdrant_config.url or ""
 
-        if local_path:
-            log.info(f"qdrant client in embedded mode at {local_path}")
-            _CLIENT = QdrantClient(path=local_path)
-        elif url.startswith(("file://", "local://")):
-            path = url.split("://", 1)[1]
-            log.info(f"qdrant client in embedded mode at {path}")
-            _CLIENT = QdrantClient(path=path)
-        else:
-            log.info(f"qdrant client in server mode at {url}")
-            _CLIENT = QdrantClient(url=url)
+                if local_path:
+                    log.info(f"qdrant client in embedded mode at {local_path}")
+                    _CLIENT = QdrantClient(path=local_path)
+                elif url.startswith(("file://", "local://")):
+                    path = url.split("://", 1)[1]
+                    log.info(f"qdrant client in embedded mode at {path}")
+                    _CLIENT = QdrantClient(path=path)
+                else:
+                    log.info(f"qdrant client in server mode at {url}")
+                    _CLIENT = QdrantClient(url=url)
 
-        if not _ATEXIT_REGISTERED:
-            atexit.register(close_client)
-            _ATEXIT_REGISTERED = True
+                if not _ATEXIT_REGISTERED:
+                    atexit.register(close_client)
+                    _ATEXIT_REGISTERED = True
 
     return _CLIENT
 
@@ -89,7 +93,7 @@ def upsert_chunks(
     collection_name = cfg.load().qdrant.collection_chunks
     points = []
 
-    for item, vector in zip(item_list, vectors):
+    for item, vector in zip(item_list, vectors, strict=True):
         point_id = _stable_point_id(item["chunk_id"])
         payload = {
             key: value
@@ -158,6 +162,7 @@ def search(
     top_k: int = 8,
     paper_ids: list[str] | None = None,
     modality: str | None = None,
+    raise_on_error: bool = False,
 ) -> list[dict[str, Any]]:
     """执行带 metadata 过滤条件的向量检索。"""
     from qdrant_client.http import models as qdrant_models
@@ -214,6 +219,8 @@ def search(
                 with_payload=True,
             )
     except Exception as error:
+        if raise_on_error:
+            raise
         log.warning(
             "qdrant search degraded, returning empty result: "
             f"{type(error).__name__}: {error}"

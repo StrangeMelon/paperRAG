@@ -13,42 +13,51 @@ BGE-M3 原生多语种(中英同空间), 语言链路在此由模型天然承接
 from __future__ import annotations
 
 from collections.abc import Iterable
+from threading import Lock
 
 from .. import config as cfg
+from ..mcp.resource_guards import hold_resource
 from ..utils.hf_cache import resolve_cached_snapshot
 from ..utils.logger import get_logger
 
 log = get_logger("embed.bge_m3")
 _MODEL = None
+_MODEL_LOCK = Lock()
+_ENCODE_LOCK = Lock()
 
 
 def _model():
     global _MODEL
     if _MODEL is None:
-        from FlagEmbedding import BGEM3FlagModel
+        with _MODEL_LOCK:
+            if _MODEL is None:
+                from FlagEmbedding import BGEM3FlagModel
 
-        c = cfg.load()
-        device = c.embedding.device
-        if device == "auto":
-            import platform
+                c = cfg.load()
+                device = c.embedding.device
+                if device == "auto":
+                    import platform
 
-            import torch
+                    import torch
 
-            if platform.system() == "Darwin":
-                device = "cpu"
-            elif torch.cuda.is_available():
-                device = "cuda"
-            else:
-                device = "cpu"
-        use_fp16 = device != "cpu"
-        model_name = resolve_cached_snapshot(c.embedding.model_name, c.paths.models_dir)
-        log.info(f"loading {model_name} on {device} (fp16={use_fp16}, cache={c.paths.models_dir})")
-        _MODEL = BGEM3FlagModel(
-            model_name,
-            use_fp16=use_fp16,
-            cache_dir=c.paths.models_dir,
-            devices=[device] if device != "auto" else None,
-        )
+                    if platform.system() == "Darwin":
+                        device = "cpu"
+                    elif torch.cuda.is_available():
+                        device = "cuda"
+                    else:
+                        device = "cpu"
+                use_fp16 = device != "cpu"
+                model_name = resolve_cached_snapshot(c.embedding.model_name, c.paths.models_dir)
+                log.info(
+                    f"loading {model_name} on {device} "
+                    f"(fp16={use_fp16}, cache={c.paths.models_dir})"
+                )
+                _MODEL = BGEM3FlagModel(
+                    model_name,
+                    use_fp16=use_fp16,
+                    cache_dir=c.paths.models_dir,
+                    devices=[device] if device != "auto" else None,
+                )
     return _MODEL
 
 
@@ -57,14 +66,16 @@ def encode(texts: Iterable[str]) -> list[list[float]]:
     texts = list(texts)
     if not texts:
         return []
-    out = _model().encode(
-        texts,
-        batch_size=c.batch_size,
-        max_length=c.max_length,
-        return_dense=True,
-        return_sparse=False,
-        return_colbert_vecs=False,
-    )
+    # Wiki worker 可并发多篇论文; 单个 GPU 模型的推理与首次加载保持串行。
+    with hold_resource("embedding"), _ENCODE_LOCK:
+        out = _model().encode(
+            texts,
+            batch_size=c.batch_size,
+            max_length=c.max_length,
+            return_dense=True,
+            return_sparse=False,
+            return_colbert_vecs=False,
+        )
     dense = out["dense_vecs"]
     return [vec.tolist() for vec in dense]
 

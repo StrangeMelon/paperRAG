@@ -14,6 +14,11 @@ tests/test_bge_m3_real.py), 本文件只证接口设计。
 
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+
 import numpy as np
 
 import paper_rag.config as config
@@ -100,3 +105,51 @@ def test_generator_input_accepted(monkeypatch) -> None:
     out = bge.encode(t for t in ("a", "b", "c"))
     assert len(out) == 3
     assert fake.calls[0][0] == ["a", "b", "c"]
+
+
+def test_concurrent_encode_calls_are_serialized(monkeypatch) -> None:
+    class _SlowModel(_FakeModel):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active = 0
+            self.max_active = 0
+            self.lock = threading.Lock()
+
+        def encode(self, texts, **kwargs):
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.02)
+            try:
+                return super().encode(texts, **kwargs)
+            finally:
+                with self.lock:
+                    self.active -= 1
+
+    fake = _SlowModel()
+    monkeypatch.setattr(bge, "_model", lambda: fake)
+    _patch_config(monkeypatch)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(bge.encode_one, ["a", "b"]))
+
+    assert fake.max_active == 1
+
+
+def test_encode_holds_embedding_resource_for_model_execution(monkeypatch) -> None:
+    fake = _FakeModel()
+    events: list[str] = []
+
+    @contextmanager
+    def guard(name: str):
+        events.append(f"enter:{name}")
+        yield
+        events.append(f"exit:{name}")
+
+    monkeypatch.setattr(bge, "_model", lambda: fake)
+    monkeypatch.setattr(bge, "hold_resource", guard)
+    _patch_config(monkeypatch)
+
+    bge.encode_one("query")
+
+    assert events == ["enter:embedding", "exit:embedding"]

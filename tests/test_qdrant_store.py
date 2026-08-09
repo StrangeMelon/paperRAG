@@ -403,3 +403,15 @@ def test_search_returns_empty_list_when_qdrant_fails(
     )
 
     assert store.search([0.1, 0.2]) == []
+
+
+def test_search_strict_reraises_qdrant_failure(monkeypatch) -> None:
+    store = _qdrant_module()
+    monkeypatch.setattr(
+        store,
+        "get_client",
+        lambda: (_ for _ in ()).throw(ConnectionError("qdrant unavailable")),
+    )
+
+    with pytest.raises(ConnectionError, match="qdrant unavailable"):
+        store.search([0.1, 0.2], raise_on_error=True)

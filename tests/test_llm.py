@@ -4,10 +4,9 @@
         chat 报错——错误信息指向环境变量, 是用户可执行的修复指引)。
 切片 1: chat 语义(参数透传、model 形参覆盖配置、content 为 None 时返回空串、
         默认 temperature/max_tokens 与基准一致)。
-切片 2: extra_body 确认偏离(配置为空表时 create 调用形参与基准逐键一致——
-        不多传 extra_body 键; 非空时透传, 承载 Qwen enable_thinking=false)。
-切片 3: 模块级单例(同配置复用同一客户端、api_key 变化自动重建、
-        reset_client_for_test 丢弃缓存)。
+切片 2: 供应商参数透传(extra_body / reasoning_effort / timeout), thinking 模式
+        可省略 temperature; 空配置时请求形状与基准一致。
+切片 3: 多端点客户端池(同配置复用、不同端点隔离、reset 清空缓存)。
 
 接口约定(与基准一致):
 
@@ -19,6 +18,7 @@
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -170,6 +170,39 @@ def test_extra_body_passthrough(monkeypatch):
     assert completions.calls[0]["extra_body"] == {"enable_thinking": False}
 
 
+def test_deepseek_params_and_endpoint_override(monkeypatch):
+    _conf(monkeypatch)
+    completions = _FakeCompletions()
+    captured_client_args = {}
+
+    def _client(**kwargs):
+        captured_client_args.update(kwargs)
+        return SimpleNamespace(chat=SimpleNamespace(completions=completions))
+
+    monkeypatch.setattr(llm_mod, "get_client", _client)
+    llm_mod.chat(
+        [{"role": "user", "content": "hi"}],
+        model="deepseek-v4-flash",
+        temperature=None,
+        base_url="https://api.deepseek.com",
+        api_key="sk-deepseek",
+        extra_body={"thinking": {"type": "enabled"}},
+        reasoning_effort="low",
+        timeout_sec=90,
+    )
+
+    assert captured_client_args == {
+        "base_url": "https://api.deepseek.com",
+        "api_key": "sk-deepseek",
+    }
+    call = completions.calls[0]
+    assert call["model"] == "deepseek-v4-flash"
+    assert "temperature" not in call
+    assert call["extra_body"] == {"thinking": {"type": "enabled"}}
+    assert call["reasoning_effort"] == "low"
+    assert call["timeout"] == 90
+
+
 def test_extra_body_config_default_is_empty_dict():
     """default.yaml 的 extra_body 缺省为空表——未配置 Qwen 参数时行为与基准一致。"""
     import paper_rag.config as config
@@ -214,3 +247,21 @@ def test_reset_client_for_test_drops_cache(monkeypatch):
     c2 = llm_mod.get_client()
     assert c1 is not c2
     assert len(_FakeOpenAI.constructed) == 2
+
+
+def test_chat_holds_llm_resource_during_request(monkeypatch):
+    _conf(monkeypatch)
+    _stub_client(monkeypatch)
+    events: list[str] = []
+
+    @contextmanager
+    def guard(name: str):
+        events.append(f"enter:{name}")
+        yield
+        events.append(f"exit:{name}")
+
+    monkeypatch.setattr(llm_mod, "hold_resource", guard)
+
+    llm_mod.chat([{"role": "user", "content": "hi"}])
+
+    assert events == ["enter:llm", "exit:llm"]

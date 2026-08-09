@@ -19,6 +19,7 @@ bi-encoder(dense)在入库时独立编码文档, 不知道将来的查询; cross
 from __future__ import annotations
 
 from .. import config as cfg
+from ..mcp.resource_guards import hold_resource
 from ..utils.hf_cache import resolve_cached_snapshot
 from ..utils.logger import get_logger
 
@@ -41,11 +42,19 @@ def _model():
         c = cfg.load()
         cache_dir = c.reranker.cache_dir or c.paths.models_dir
         model_name = resolve_cached_snapshot(c.reranker.model_name, cache_dir)
+        use_fp16 = bool(c.reranker.use_fp16)
+        if use_fp16:
+            try:
+                import torch
+
+                use_fp16 = bool(torch.cuda.is_available())
+            except Exception:
+                use_fp16 = False
         log.info(f"loading reranker {model_name} (cache={cache_dir})")
         try:
             _MODEL = FlagReranker(
                 model_name,
-                use_fp16=c.reranker.use_fp16,
+                use_fp16=use_fp16,
                 cache_dir=cache_dir,
             )
         except Exception as e:
@@ -64,16 +73,17 @@ def rerank(query: str, candidates: list[dict], *, top_k: int | None = None) -> l
     if not c.reranker.enabled:
         return candidates[:top_k]
 
-    model = _model()
-    if model is None:
-        return candidates[:top_k]
+    with hold_resource("reranker"):
+        model = _model()
+        if model is None:
+            return candidates[:top_k]
 
-    pairs = [(query, (item.get("text") or "")) for item in candidates]
-    try:
-        scores = model.compute_score(pairs, normalize=True)
-    except Exception as e:
-        log.warning(f"reranker compute_score failed: {e}; returning RRF order")
-        return candidates[:top_k]
+        pairs = [(query, (item.get("text") or "")) for item in candidates]
+        try:
+            scores = model.compute_score(pairs, normalize=True)
+        except Exception as e:
+            log.warning(f"reranker compute_score failed: {e}; returning RRF order")
+            return candidates[:top_k]
     if isinstance(scores, float):
         scores = [scores]
 

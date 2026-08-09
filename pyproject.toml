@@ -100,13 +100,6 @@ mcp = [
     "langchain-mcp-adapters>=0.1,<0.2",
 ]
 
-[project.urls]
-Homepage = "https://github.com/Ttttt-s/paper-rag-agent"
-Repository = "https://github.com/Ttttt-s/paper-rag-agent"
-Documentation = "https://github.com/Ttttt-s/paper-rag-agent/tree/main/docs"
-Changelog = "https://github.com/Ttttt-s/paper-rag-agent/blob/main/CHANGELOG.md"
-"Bug Tracker" = "https://github.com/Ttttt-s/paper-rag-agent/issues"
-
 [project.scripts]
 paper-rag-mcp = "paper_rag.mcp.server:main"
 

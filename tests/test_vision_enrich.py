@@ -5,6 +5,7 @@ summarizer 全部打桩(不触网), 图片用真实临时文件。
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -273,6 +274,7 @@ def _stub_vision_cfg(monkeypatch, **over) -> None:
         "cache_dir": "unused",
         "max_images_per_paper": 40,
         "max_image_bytes": 8_000_000,
+        "max_concurrency": 4,
     }
     base.update(over)
     stub = SimpleNamespace(vision=SimpleNamespace(**base))
@@ -335,3 +337,70 @@ def test_cache_miss_across_languages(tmp_path, png):
         "p1", [_chunk(png)], summarizer=spy, cache=cache, cache_enabled=True, language="en"
     )
     assert calls == ["zh", "en"]  # 语言入键, 不发生跨语言脏命中
+
+
+def test_parallel_completion_commits_chunks_and_cache_in_input_order(tmp_path, png, monkeypatch):
+    """API 即使逆序返回, chunk 修改和缓存写入也只能由主线程原序提交。"""
+    chunks = [_chunk(png, chunk_id=f"c{i}") for i in range(1, 4)]
+    all_started = threading.Barrier(3)
+    c3_done = threading.Event()
+    c2_done = threading.Event()
+    completion_order: list[str] = []
+    main_thread = threading.get_ident()
+
+    def deliberately_reversed(req):
+        all_started.wait(timeout=2)
+        if req.chunk_id == "c3":
+            completion_order.append(req.chunk_id)
+            c3_done.set()
+        elif req.chunk_id == "c2":
+            assert c3_done.wait(timeout=2)
+            completion_order.append(req.chunk_id)
+            c2_done.set()
+        else:
+            assert c2_done.wait(timeout=2)
+            completion_order.append(req.chunk_id)
+        return VisualSummaryResult(
+            status=STATUS_OK,
+            summary=req.chunk_id,
+            provider="api",
+        )
+
+    mutation_order: list[str] = []
+    mutation_threads: list[int] = []
+    original_record = en._record
+
+    def record_in_order(chunk, status, result, error=""):
+        mutation_order.append(chunk["chunk_id"])
+        mutation_threads.append(threading.get_ident())
+        original_record(chunk, status, result, error)
+
+    monkeypatch.setattr(en, "_record", record_in_order)
+
+    class TrackingCache(VisionSummaryCache):
+        def __init__(self, cache_dir):
+            super().__init__(cache_dir)
+            self.write_order: list[str] = []
+            self.write_threads: list[int] = []
+
+        def write(self, key, result):
+            self.write_order.append(result.summary)
+            self.write_threads.append(threading.get_ident())
+            super().write(key, result)
+
+    cache = TrackingCache(tmp_path / "vc")
+    en.enrich_chunks(
+        "p1",
+        chunks,
+        summarizer=deliberately_reversed,
+        cache=cache,
+        cache_enabled=True,
+        max_concurrency=3,
+    )
+
+    assert completion_order == ["c3", "c2", "c1"]
+    assert mutation_order == ["c1", "c2", "c3"]
+    assert cache.write_order == ["c1", "c2", "c3"]
+    assert mutation_threads == [main_thread] * 3
+    assert cache.write_threads == [main_thread] * 3
+    assert [c["metadata"]["visual_summary"] for c in chunks] == ["c1", "c2", "c3"]

@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 
 from .. import config as cfg
 from ..utils.logger import get_logger
@@ -36,6 +39,20 @@ from .schema import (
 log = get_logger("vision.enrich")
 
 SummarizerFn = Callable[[VisualSummaryRequest], VisualSummaryResult]
+
+
+@dataclass
+class _EnrichmentPlan:
+    """A visual chunk's result slot; only the main thread commits it."""
+
+    chunk: dict
+    request: VisualSummaryRequest | None = None
+    cache_key: str | None = None
+    result: VisualSummaryResult | None = None
+    status: str | None = None
+    error: str = ""
+    future: Future[tuple[VisualSummaryResult, str]] | None = None
+
 
 # 只有带图片资产的 figure/table 进视觉模型; formula 是 LaTeX 文本, 无 asset。
 _VISUAL_MODALITIES = {"figure", "table"}
@@ -173,10 +190,13 @@ def enrich_chunks(
     language: str | None = None,
     max_image_bytes: int | None = None,
     max_images_per_paper: int | None = None,
+    max_concurrency: int | None = None,
 ) -> list[dict]:
     """就地给本篇的 figure/table chunk 追加视觉摘要, 返回同一列表。
 
-    ``summarizer`` 未注入时按配置构造; 配置不全则整体跳过(chunk 原样返回)。
+        ``summarizer`` 未注入时按配置构造; 配置不全则整体跳过(chunk 原样返回)。
+    并发线程只请求摘要, 不修改 chunk 也不写缓存; 全部结果就绪后由
+    主线程按输入 chunk 顺序追加摘要、记录状态并写缓存。
     """
     vision = cfg.load().vision
     if summarizer is None:
@@ -194,56 +214,126 @@ def enrich_chunks(
         cache = VisionSummaryCache(vision.cache_dir)
     limit = vision.max_images_per_paper if max_images_per_paper is None else max_images_per_paper
     size_cap = vision.max_image_bytes if max_image_bytes is None else max_image_bytes
+    concurrency = (
+        vision.max_concurrency if max_concurrency is None else max(1, int(max_concurrency))
+    )
 
     processed = 0
+    plans: list[_EnrichmentPlan] = []
     for chunk in chunks:
         if chunk.get("modality") not in _VISUAL_MODALITIES:
             continue
         if str(chunk.get("paper_id") or "") != paper_id:
             continue
 
+        plan = _EnrichmentPlan(chunk=chunk)
+        plans.append(plan)
         asset = chunk.get("asset_path")
         if not asset:
-            _record(chunk, STATUS_SKIPPED, None, "missing asset_path")
+            plan.status = STATUS_SKIPPED
+            plan.error = "missing asset_path"
             continue
         path = Path(str(asset))
         if not path.exists():
-            _record(chunk, STATUS_SKIPPED, None, f"asset not found: {path}")
+            plan.status = STATUS_SKIPPED
+            plan.error = f"asset not found: {path}"
             continue
         if processed >= limit:
-            _record(chunk, STATUS_SKIPPED, None, f"max_images_per_paper={limit} reached")
+            plan.status = STATUS_SKIPPED
+            plan.error = f"max_images_per_paper={limit} reached"
             continue
         if path.stat().st_size > size_cap:
-            _record(chunk, STATUS_SKIPPED, None, f"image exceeds max_image_bytes={size_cap}")
+            plan.status = STATUS_SKIPPED
+            plan.error = f"image exceeds max_image_bytes={size_cap}"
             continue
 
         request = request_from_chunk(chunk, model=vision.model, language=language)
+        plan.request = request
         processed += 1
 
         key = cache.key_for(request) if cache is not None and use_cache else None
+        plan.cache_key = key
         if key is not None:
             hit = cache.read(key)
             if hit is not None and hit.summary:
-                _append_summary(chunk, hit.summary, language)
-                _record(chunk, STATUS_CACHED, hit)
+                plan.result = hit
+                plan.status = STATUS_CACHED
+                plan.request = None
                 continue
 
-        result = _invoke(summarizer, request)
-        status = STATUS_OK
-        if result.status != STATUS_OK and fallback_summarizer is not None:
-            fallback = _invoke(fallback_summarizer, request)
-            if fallback.status == STATUS_OK and fallback.summary:
-                result, status = fallback, STATUS_FALLBACK
+    pending = [plan for plan in plans if plan.request is not None and plan.result is None]
+    fallback_lock = Lock() if fallback_summarizer is not None else None
+    workers = min(concurrency, len(pending))
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="vision") as executor:
+            for plan in pending:
+                plan.future = executor.submit(
+                    _summarize_request,
+                    summarizer,
+                    fallback_summarizer,
+                    plan.request,
+                    fallback_lock,
+                )
+            # Resolve slots in input order. Workers may finish in any order, but do not mutate state.
+            for plan in pending:
+                plan.result, plan.status = plan.future.result()
+    else:
+        for plan in pending:
+            plan.result, plan.status = _summarize_request(
+                summarizer,
+                fallback_summarizer,
+                plan.request,
+                fallback_lock,
+            )
 
+    # The only mutation/cache-write phase. plans preserves the original visual chunk order.
+    for plan in plans:
+        chunk, result, status = plan.chunk, plan.result, plan.status
+        if status == STATUS_SKIPPED:
+            _record(chunk, status, None, plan.error)
+            continue
+        if result is None or status is None:
+            _record(
+                chunk,
+                STATUS_FAILED,
+                result,
+                "vision worker returned no result",
+            )
+            continue
+        if status == STATUS_CACHED:
+            _append_summary(chunk, result.summary, language)
+            _record(chunk, status, result)
+            continue
         if result.status not in (STATUS_OK,) or not result.summary:
             _record(chunk, result.status if result.status != STATUS_OK else STATUS_FAILED, result)
             continue
 
         _append_summary(chunk, result.summary, language)
         _record(chunk, status, result)
-        if key is not None and cache is not None:
-            cache.write(key, result)
+        if plan.cache_key is not None and cache is not None:
+            cache.write(plan.cache_key, result)
     return chunks
+
+
+def _summarize_request(
+    summarizer: SummarizerFn,
+    fallback_summarizer: SummarizerFn | None,
+    request: VisualSummaryRequest,
+    fallback_lock: Lock | None,
+) -> tuple[VisualSummaryResult, str]:
+    """工作线程的纯计算边界: 只返回结果, 不修改 chunk/缓存。"""
+    result = _invoke(summarizer, request)
+    status = STATUS_OK
+    if result.status != STATUS_OK and fallback_summarizer is not None:
+        if fallback_lock is None:
+            fallback = _invoke(fallback_summarizer, request)
+        else:
+            # Local fallback owns one GPU model and must not run concurrently.
+            with fallback_lock:
+                fallback = _invoke(fallback_summarizer, request)
+        if fallback.status == STATUS_OK and fallback.summary:
+            result, status = fallback, STATUS_FALLBACK
+    return result, status
 
 
 def _invoke(fn: SummarizerFn, request: VisualSummaryRequest) -> VisualSummaryResult:

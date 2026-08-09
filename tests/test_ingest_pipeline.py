@@ -2,7 +2,8 @@
 
 切片 0: 元数据卡片(_title_aliases 缩写词、英文/中文模板路由、chunk 字段)。
 切片 1: 主流程(状态机顺序、卡片插在 chunks[0]、向量条数、Qdrant 替换语义、
-        语言贯通到 grade_sections、wiki 钩子缺模块时非致命)。
+        语言贯通到 grade_sections、wiki 持久化入队钩子: 语言+内容指纹显式
+        传递、submit 异常非致命)。
 切片 2: 幂等与去重(dedup 探测 merged_into、done 跳过、force 覆盖)。
 切片 3: 失败隔离(步骤异常 -> failed + ingest_runs 记录 + 异常上抛;
         真空 chunks -> failed/no_chunks——基准该守卫在插卡之后是死代码,
@@ -129,6 +130,18 @@ def _wire(
     monkeypatch.setattr(
         ip, "bge_m3", SimpleNamespace(encode=lambda texts: [[0.0] * 4 for _ in texts])
     )
+    # wiki 持久化入队打桩: 记录 language 与 content_fingerprint 的显式传递
+    import paper_rag.wiki.queue as wq
+
+    fake_sql.wiki_calls = []
+
+    def _fake_submit(pid, *, language=None, content_fingerprint=""):
+        fake_sql.wiki_calls.append(
+            {"paper_id": pid, "language": language, "fingerprint": content_fingerprint}
+        )
+        return {"queued": True, "created": True, "job_id": 1}
+
+    monkeypatch.setattr(wq, "submit_paper_indexed", _fake_submit)
     return fake_sql, fake_qd, parsed
 
 
@@ -188,7 +201,11 @@ def test_happy_path_states_card_vectors_and_replacement(monkeypatch, tmp_path: P
 
     assert out["status"] == "done"
     assert out["chunks"] == 5  # 4 正文 + 1 元数据卡片
-    assert "error" in out["wiki"]  # wiki 模块未重建, 非致命
+    # wiki 持久化入队: submit 的返回即报告; 指纹是排序 chunk_id 集合的 sha1
+    assert out["wiki"]["queued"] is True
+    (wiki_call,) = fake_sql.wiki_calls
+    chunk_ids = sorted(c["chunk_id"] for c in fake_sql.saved[1])
+    assert wiki_call["fingerprint"] == hashlib.sha1("\n".join(chunk_ids).encode()).hexdigest()
 
     assert fake_sql.upserted["status"] == "fetched"
     status_names = [s for s, _ in fake_sql.statuses]
@@ -217,6 +234,21 @@ def test_zh_language_flows_to_grading_and_card(monkeypatch, tmp_path: Path) -> N
     assert fake_sql.statuses[1][1]["parsed_with"] == "mineru+complete"
     _, chunks = fake_sql.saved
     assert chunks[0]["text"].startswith("论文元数据记录。")
+    # 语言同样显式传给 wiki 任务, worker 不再猜语言
+    assert fake_sql.wiki_calls[0]["language"] == "zh"
+
+
+def test_wiki_submit_failure_is_nonfatal(monkeypatch, tmp_path: Path) -> None:
+    _wire(monkeypatch, tmp_path)
+    import paper_rag.wiki.queue as wq
+
+    def _boom(pid, **kw):
+        raise RuntimeError("sqlite locked")
+
+    monkeypatch.setattr(wq, "submit_paper_indexed", _boom)
+    out = ip.ingest(FetchResult(meta=_meta(), pdf_path="/tmp/x.pdf"))
+    assert out["status"] == "done"  # 入库不受影响
+    assert "error" in out["wiki"]  # 诚实信号
 
 
 # ---------------------------------------------------------------------------

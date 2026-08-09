@@ -14,24 +14,17 @@ class _FakeQdrantClient:
         self,
         existing_collections: set[str] | None = None,
     ) -> None:
-        self.existing_collections = set(
-            existing_collections or set()
-        )
+        self.existing_collections = set(existing_collections or set())
         self.created_collections: list[dict] = []
 
     def get_collections(self):
         return SimpleNamespace(
-            collections=[
-                SimpleNamespace(name=name)
-                for name in self.existing_collections
-            ]
+            collections=[SimpleNamespace(name=name) for name in self.existing_collections]
         )
 
     def create_collection(self, **kwargs) -> None:
         self.created_collections.append(kwargs)
-        self.existing_collections.add(
-            kwargs["collection_name"]
-        )
+        self.existing_collections.add(kwargs["collection_name"])
 
 
 def _init_store_module() -> ModuleType:
@@ -80,10 +73,7 @@ def test_init_qdrant_creates_missing_collections(
 
     module.init_qdrant()
 
-    created_names = {
-        call["collection_name"]
-        for call in client.created_collections
-    }
+    created_names = {call["collection_name"] for call in client.created_collections}
     assert created_names == {
         "test_paper_chunks",
         "test_wiki_entries",
@@ -91,9 +81,7 @@ def test_init_qdrant_creates_missing_collections(
 
     for call in client.created_collections:
         assert call["vectors_config"].size == 1024
-        assert str(call["vectors_config"].distance).lower().endswith(
-            "cosine"
-        )
+        assert str(call["vectors_config"].distance).lower().endswith("cosine")
 
     assert close_calls == ["closed"]
 
@@ -161,6 +149,46 @@ def test_init_sqlite_creates_real_database(
         "section",
         "chunk",
         "ingest_runs",
+    } <= set(inspect(engine).get_table_names())
+
+    engine.dispose()
+    sqlite_store._ENGINE = None
+
+
+def test_init_sqlite_creates_wiki_tables(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """wiki 8 张表必须由 init_store 显式建出, 不能靠 QA 首次访问懒建。"""
+    module = _init_store_module()
+    from sqlalchemy import inspect
+
+    from paper_rag.store import sqlite_store
+
+    monkeypatch.setattr(
+        module.cfg,
+        "load",
+        lambda: _config(tmp_path / "papers.sqlite"),
+    )
+    monkeypatch.setattr(
+        sqlite_store.cfg,
+        "load",
+        lambda: _config(tmp_path / "papers.sqlite"),
+    )
+    sqlite_store._ENGINE = None
+
+    module.init_sqlite()
+
+    engine = sqlite_store.get_engine()
+    assert {
+        "wiki_entries",
+        "wiki_labels",
+        "wiki_entry_papers",
+        "wiki_entry_evidence",
+        "wiki_versions",
+        "wiki_jobs",
+        "wiki_review_queue",
+        "wiki_usage",
     } <= set(inspect(engine).get_table_names())
 
     engine.dispose()

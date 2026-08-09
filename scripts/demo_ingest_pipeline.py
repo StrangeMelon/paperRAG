@@ -12,7 +12,7 @@ MinerU 权重, 只读)。真实 GPU MinerU 解析约 1-3 分钟。
 - 检索闭环: 真实英文问题编码后在 Qdrant 命中本论文(全链第一次问答式检索);
 - 幂等: 重复 ingest -> skipped/done; force=True 重建后 Qdrant 点数不变
   (先删后插的替换语义, 不残留脏向量);
-- wiki 钩子: wiki 模块未重建, 返回值带 error(预期诚实信号, 非致命)。
+- wiki 钩子: 持久化入队成功, 返回 {"queued": True, ...}(任务由 wiki_worker 异步消费)。
 """
 
 from __future__ import annotations
@@ -88,7 +88,7 @@ def main() -> None:
     assert res["status"] == "done", f"入库未完成: {res}"
     n_chunks = res["chunks"]
     assert n_chunks > 40, f"chunk 数异常: {n_chunks}"
-    assert "error" in res["wiki"], "wiki 模块未建, 应返回非致命 error"
+    assert res["wiki"].get("queued") is True, f"wiki 持久化入队失败: {res['wiki']}"
     print(f"[1/5] 端到端入库完成: status=done, chunks={n_chunks}(含元数据卡片)")
 
     # --- 2. SQLite 状态机与步骤记录 ---

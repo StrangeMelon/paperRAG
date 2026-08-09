@@ -393,11 +393,30 @@ def test_no_wiki_context_is_accounted_as_unused(monkeypatch):
     assert out["raw"]["wiki_key_papers"] == []
 
 
-def test_wiki_module_absent_degrades(monkeypatch):
-    """wiki 模块尚未重建, 真实钩子应 try/except 降级(与 vision 同款诚实信号)。"""
+def test_wiki_module_available_hints_flow_through(monkeypatch):
+    """wiki 模块已重建: 真实 wiki_rewrite_hints 生效, 词条名进入 dense 扩展。"""
     _conf(monkeypatch)
     _no_papers(monkeypatch)
     _stub_chat(monkeypatch, _payload(variants=[], hyde=None))
+
+    out = qr.rewrite("What is RAG?", wiki_context={"entries": [{"name": "RAG"}]})
+
+    assert out["dense_queries"][0] == "What is RAG?"
+    assert "RAG" in out["dense_queries"]
+    assert out["raw"]["wiki_context_used"] is True
+
+
+def test_wiki_hint_exception_degrades(monkeypatch):
+    """wiki 钩子异常时 try/except 降级(与 vision 同款诚实信号)。"""
+    _conf(monkeypatch)
+    _no_papers(monkeypatch)
+    _stub_chat(monkeypatch, _payload(variants=[], hyde=None))
+    import paper_rag.wiki.context as wctx
+
+    def _boom(ctx):
+        raise RuntimeError("wiki down")
+
+    monkeypatch.setattr(wctx, "wiki_rewrite_hints", _boom)
 
     out = qr.rewrite("What is RAG?", wiki_context={"entries": [{"name": "RAG"}]})
 

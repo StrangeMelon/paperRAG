@@ -24,29 +24,18 @@ def init_qdrant() -> None:
     elif distance_name == "dot":
         distance = qdrant_models.Distance.DOT
     else:
-        raise ValueError(
-            "unsupported Qdrant distance: "
-            f"{config.qdrant.distance}"
-        )
+        raise ValueError(f"unsupported Qdrant distance: {config.qdrant.distance}")
 
     try:
         collection_names = (
             config.qdrant.collection_chunks,
             config.qdrant.collection_wiki,
         )
-        existing_names = {
-            collection.name
-            for collection in (
-                client.get_collections().collections
-            )
-        }
+        existing_names = {collection.name for collection in (client.get_collections().collections)}
 
         for collection_name in collection_names:
             if collection_name in existing_names:
-                log.info(
-                    f"Qdrant collection already exists: "
-                    f"{collection_name}"
-                )
+                log.info(f"Qdrant collection already exists: {collection_name}")
                 continue
 
             client.create_collection(
@@ -69,16 +58,25 @@ def init_qdrant() -> None:
 
 
 def init_sqlite() -> None:
-    """创建 SQLite 文件和 SQLModel 表结构。"""
+    """创建 SQLite 文件和 SQLModel 表结构(含 wiki 的 8 张表)。"""
+    from sqlmodel import SQLModel
+
     from paper_rag.store import sqlite_store
+
+    # wiki 的表定义分散在各自模块里, 必须先 import 让它们注册进
+    # SQLModel.metadata, 否则 create_all 建不出 wiki 表, 只能等 worker/QA
+    # 首次访问时懒建(初始化脚本应当一次把库建全)。
+    from paper_rag.wiki import queue as _wiki_queue
+    from paper_rag.wiki import review_queue as _wiki_review
+    from paper_rag.wiki import store as _wiki_store
+    from paper_rag.wiki import usage as _wiki_usage
 
     config = cfg.load()
     engine = sqlite_store.get_engine()
+    # engine 可能在 wiki 模块 import 之前就已缓存(create_all 已跑过), 幂等补建
+    SQLModel.metadata.create_all(engine)
 
-    log.info(
-        f"SQLite ready at {config.paths.sqlite_path} "
-        f"(dialect={engine.dialect.name})"
-    )
+    log.info(f"SQLite ready at {config.paths.sqlite_path} (dialect={engine.dialect.name})")
 
 
 def main() -> None:

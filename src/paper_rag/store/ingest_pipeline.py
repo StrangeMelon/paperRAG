@@ -16,7 +16,9 @@
   en/None 用基准英文; _title_aliases 缩写词逻辑保持基准(中文标题优雅空集)。
 - 真空守卫前移: 基准把 "chunks 为空则 failed" 放在插入元数据卡片之后, 卡片
   必然存在使守卫成为死代码; 重建版在插卡之前检查 build_chunks 的真实产物。
-- wiki 入队钩子按基准同款接回(try/except 非致命, wiki 课落地前打 warning)。
+- wiki 入队钩子改为持久化队列: 只做一次幂等 INSERT(paper_id + 内容指纹 + 语言),
+  LLM 成本全部在独立 wiki_worker 进程, 批量入库与 wiki 建设解耦;
+  try/except 非致命, 失败只记 warning 不影响入库结果。
 """
 
 from __future__ import annotations
@@ -243,17 +245,27 @@ def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
     sqlite_store.set_status(paper_id, "indexed")
     sqlite_store.set_status(paper_id, "done")
 
-    # 异步 wiki 更新入队(非阻塞; wiki 模块未重建前打 warning, 属预期诚实信号)
+    # wiki 持久化入队(非阻塞): 语言与内容指纹显式随任务传递, worker 异步消费。
+    # force 重建 -> chunk 集合变化 -> 指纹变化 -> 自然产生新任务(幂等键失配)。
     try:
         from ..wiki.queue import submit_paper_indexed
 
-        submit_paper_indexed(paper_id)
-        wiki_report = {"queued": True}
+        wiki_report = submit_paper_indexed(
+            paper_id,
+            language=language,
+            content_fingerprint=_content_fingerprint(chunks),
+        )
     except Exception as e:
         log.warning(f"wiki enqueue failed (non-fatal): {e}")
         wiki_report = {"error": str(e)}
 
     return {"paper_id": paper_id, "status": "done", "chunks": len(chunks), "wiki": wiki_report}
+
+
+def _content_fingerprint(chunks: list[dict]) -> str:
+    """排序后 chunk_id 集合的 sha1: 与内容切块一一对应, 与入库顺序无关。"""
+    ids = sorted(str(c.get("chunk_id") or "") for c in chunks)
+    return hashlib.sha1("\n".join(ids).encode("utf-8")).hexdigest()
 
 
 def _replace_qdrant_chunks(paper_id: str, chunks: list[dict], vectors: list[list[float]]) -> int:

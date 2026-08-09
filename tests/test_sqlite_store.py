@@ -206,6 +206,25 @@ def test_set_status_logs_missing_paper_id_without_placeholder(
     assert messages == [("set_status: paper not found paper:missing",)]
 
 
+def test_get_papers_by_ids_returns_all_matches_without_partial_fallback(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    store, _ = _isolated_store(monkeypatch, tmp_path)
+    store.upsert_paper({"paper_id": "paper:one", "title": "One"}, status="done")
+    store.upsert_paper({"paper_id": "paper:two", "title": "Two"}, status="done")
+
+    papers = store.get_papers_by_ids(["paper:two", "paper:missing", "paper:one"])
+
+    assert {paper.paper_id for paper in papers} == {"paper:one", "paper:two"}
+
+
+def test_get_papers_by_ids_short_circuits_empty_input(monkeypatch, tmp_path: Path) -> None:
+    store, _ = _isolated_store(monkeypatch, tmp_path)
+
+    assert store.get_papers_by_ids([]) == []
+
+
 def test_record_and_finish_ingest_step(
       monkeypatch,
       tmp_path: Path,

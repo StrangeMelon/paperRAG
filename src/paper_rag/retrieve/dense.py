@@ -17,4 +17,10 @@ def retrieve(
     modality: str | None = None,
 ) -> list[dict]:
     qvec = bge_m3.encode_one(query)
-    return qdrant_store.search(qvec, top_k=top_k, paper_ids=paper_ids, modality=modality)
+    return qdrant_store.search(
+        qvec,
+        top_k=top_k,
+        paper_ids=paper_ids,
+        modality=modality,
+        raise_on_error=True,
+    )

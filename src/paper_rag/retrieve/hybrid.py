@@ -77,8 +77,27 @@ def hybrid_search(
     """dense + 稀疏双腿检索后 RRF 融合, 返回 top_k*2(给 reranker 留余量)。"""
     c = cfg.load().retrieve
     top_k = top_k or c.rerank_top_k
-    dense_hits = dense.retrieve(query, top_k=c.top_k_dense, paper_ids=paper_ids, modality=modality)
-    sparse_hits = _sparse_search(query, top_k=c.top_k_bm25, paper_ids=paper_ids)
+    dense_error: Exception | None = None
+    sparse_error: Exception | None = None
+    try:
+        dense_hits = dense.retrieve(
+            query,
+            top_k=c.top_k_dense,
+            paper_ids=paper_ids,
+            modality=modality,
+        )
+    except Exception as exc:
+        dense_error = exc
+        dense_hits = []
+        log.warning(f"dense retrieval failed, continuing with sparse: {exc}")
+    try:
+        sparse_hits = _sparse_search(query, top_k=c.top_k_bm25, paper_ids=paper_ids)
+    except Exception as exc:
+        sparse_error = exc
+        sparse_hits = []
+        log.warning(f"sparse retrieval failed, continuing with dense: {exc}")
+    if dense_error is not None and sparse_error is not None:
+        raise RuntimeError("both dense and sparse retrieval are unavailable") from dense_error
     if modality:
         sparse_hits = [h for h in sparse_hits if h.get("modality") == modality]
 

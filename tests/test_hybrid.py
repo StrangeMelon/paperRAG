@@ -176,3 +176,29 @@ def test_hybrid_truncates_to_double_top_k(monkeypatch):
 
     fused_default = hybrid.hybrid_search("q")
     assert len(fused_default) == 16  # rerank_top_k(8)*2
+
+
+def test_hybrid_degrades_when_only_dense_fails(monkeypatch):
+    _conf(monkeypatch)
+    sparse = [{"chunk_id": "s1", "score_bm25": 2.0}]
+
+    def dense_failure(*args, **kwargs):
+        raise RuntimeError("qdrant down")
+
+    monkeypatch.setattr(hybrid, "dense", type("D", (), {"retrieve": staticmethod(dense_failure)}))
+    monkeypatch.setattr(hybrid, "_sparse_search", lambda *args, **kwargs: sparse)
+
+    assert hybrid.hybrid_search("q")[0]["chunk_id"] == "s1"
+
+
+def test_hybrid_raises_when_both_legs_fail(monkeypatch):
+    _conf(monkeypatch)
+
+    def failure(*args, **kwargs):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(hybrid, "dense", type("D", (), {"retrieve": staticmethod(failure)}))
+    monkeypatch.setattr(hybrid, "_sparse_search", failure)
+
+    with pytest.raises(RuntimeError, match="both dense and sparse"):
+        hybrid.hybrid_search("q")

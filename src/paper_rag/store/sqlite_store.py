@@ -275,6 +275,17 @@ def get_paper(paper_id: str) -> Paper | None:
     with Session(engine) as session:
         return session.get(Paper, paper_id)
 
+
+def get_papers_by_ids(paper_ids: list[str]) -> list[Paper]:
+    """Batch-read papers for strict scope validation."""
+    if not paper_ids:
+        return []
+
+    engine = get_engine()
+    with Session(engine) as session:
+        statement = select(Paper).where(Paper.paper_id.in_(paper_ids))
+        return list(session.exec(statement))
+
 def record_ingest_step(
     paper_id: str,
     step: str,

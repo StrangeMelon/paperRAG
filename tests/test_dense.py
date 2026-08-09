@@ -26,12 +26,13 @@ def _install_stubs(monkeypatch, hits: list[dict]):
         calls["encoded"] = text
         return [0.1, 0.2, 0.3]
 
-    def fake_search(query_vector, top_k=8, paper_ids=None, modality=None):
+    def fake_search(query_vector, top_k=8, paper_ids=None, modality=None, raise_on_error=False):
         calls["search"] = {
             "query_vector": query_vector,
             "top_k": top_k,
             "paper_ids": paper_ids,
             "modality": modality,
+            "raise_on_error": raise_on_error,
         }
         return hits
 
@@ -57,6 +58,7 @@ def test_default_params_are_top8_no_filters(monkeypatch):
     assert calls["search"]["top_k"] == 8
     assert calls["search"]["paper_ids"] is None
     assert calls["search"]["modality"] is None
+    assert calls["search"]["raise_on_error"] is True
 
 
 def test_filters_pass_through_verbatim(monkeypatch):

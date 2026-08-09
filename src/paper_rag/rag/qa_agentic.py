@@ -39,6 +39,12 @@ from .citation_check import (
     strip_suspicious_citation_forms,
     validate_citations,
 )
+from .evidence_retrieval import (
+    Principal,
+    RetrievalDependencies,
+    build_default_dependencies,
+    retrieve_evidence,
+)
 from .evidence_select import select_evidence
 from .intent_classifier import classify
 from .llm import chat
@@ -270,6 +276,21 @@ def _decide_abstain(final_chunks: list[dict], abstain_cfg) -> dict:
         f"n={result['n_chunks']}"
     )
     return result
+
+
+def _select_evidence_for_retrieval(
+    question: str,
+    chunks: list[dict],
+    intent: str | None,
+    limit: int,
+) -> tuple[list[dict], dict]:
+    """Adapt the shared service limit to legacy injectable selectors."""
+    try:
+        return select_evidence(question, chunks, intent=intent, max_chunks=limit)
+    except TypeError as exc:
+        if "max_chunks" not in str(exc):
+            raise
+        return select_evidence(question, chunks, intent=intent)
 
 
 def _no_evidence_message(abstain_cfg, language: str) -> str:
@@ -604,39 +625,54 @@ def _answer_impl(
     question = _maybe_rewrite_with_history(question, conversation_id)
     language = _query_language(question)
 
-    # Stage 2 — 解析 wiki 背景。wiki 只是查询/prompt 上下文, 永不作最终证据。
-    wiki_context = _resolve_wiki_context_safe(question, paper_ids)
+    # Stage 2 — scope 必须先于 Wiki/cache/模型校验; cache 命中仍不允许绕过权限。
+    defaults = build_default_dependencies()
+    principal = Principal(tenant_id="system", user_id="system")
+    validated_scope = defaults.validate_scope(paper_ids, principal)
+    wiki_context = _resolve_wiki_context_safe(question, validated_scope)
     _record_wiki_consumption_safe(
         question=question,
-        paper_ids=paper_ids,
+        paper_ids=validated_scope,
         wiki_context=wiki_context,
         trace_id=trace_id,
     )
-
-    # Stage 3 — qa_cache 短路。有效键含 wiki 条目版本, 背景笔记打补丁后
-    # 不会复用旧答案。
     question_for_cache = _cache_question(question, wiki_context)
-    cached = _check_cache(question_for_cache, paper_ids, trace_id)
+    cached = _check_cache(question_for_cache, validated_scope, trace_id)
     if cached is not None:
         return cached
 
-    # Stage 4 — 选 intent + 检索循环。
-    c = cfg.load().rag
-    intent_cfg = classify(question)
-    max_iter = min(intent_cfg["max_iter"], c.max_inner_iters)
-    top_k = intent_cfg["top_k"]
-    all_chunks, trace, stopped = _retrieve_loop(
-        question,
-        paper_ids,
-        top_k,
-        max_iter,
-        enable_reflect=c.enable_reflect,
-        wiki_context=wiki_context,
+    # Stage 3-6 — 调用共享领域服务完成 intent、retrieve/reflect、abstain 与
+    # evidence selection。已验证 scope 与 Wiki context 作为依赖注入避免重复工作。
+    dependencies = RetrievalDependencies(
+        validate_scope=lambda requested, caller: validated_scope,
+        resolve_wiki=lambda query, scope: wiki_context,
+        classify_intent=classify,
+        retrieve_round=lambda query, scope, top_k, wiki: _retrieve_round(
+            query,
+            scope,
+            top_k,
+            wiki_context=wiki,
+        ),
+        reflect=reflect,
+        decide_abstain=lambda chunks: _decide_abstain(chunks, cfg.load().rag.abstain),
+        select_evidence=_select_evidence_for_retrieval,
+        new_retrieval_id=lambda: trace_id,
     )
-
-    # Stage 5 — 检索一无所获时短路。
-    final_chunks = list(all_chunks.values())[: top_k * 2]
-    if not final_chunks:
+    execution = retrieve_evidence(
+        question,
+        paper_ids=validated_scope,
+        max_evidence=4,
+        include_wiki=False,
+        wiki_max_entries=0,
+        principal=principal,
+        dependencies=dependencies,
+    )
+    domain_trace = execution.trace
+    intent_cfg = domain_trace["intent"]
+    trace = domain_trace["iters"]
+    stopped = domain_trace["stopped_by"]
+    final_chunks = execution.candidate_chunks
+    if execution.internal_decision == "no_chunks":
         _enqueue_wiki_review_event(
             "qa_no_chunks",
             question=question,
@@ -649,10 +685,9 @@ def _answer_impl(
         )
         return _no_chunks_response(intent_cfg, trace, stopped, trace_id, wiki_context, language)
 
-    # Stage 6 — abstain 裁决(检索后、LLM 前, 见 ADR-0014)。
-    abstain_cfg = c.abstain
-    abstain_result = _decide_abstain(final_chunks, abstain_cfg)
-    if abstain_result["decision"] == abstain_mod.DECISION_NO_EVIDENCE:
+    abstain_cfg = cfg.load().rag.abstain
+    abstain_result = domain_trace["abstain"]
+    if execution.internal_decision == abstain_mod.DECISION_NO_EVIDENCE:
         _enqueue_wiki_review_event(
             "qa_no_evidence",
             question=question,
@@ -675,7 +710,7 @@ def _answer_impl(
             wiki_context,
             language,
         )
-    if abstain_result["decision"] == abstain_mod.DECISION_WEAK:
+    if execution.internal_decision == abstain_mod.DECISION_WEAK:
         _enqueue_wiki_review_event(
             "qa_weak_evidence",
             question=question,
@@ -689,12 +724,9 @@ def _answer_impl(
             paper_id=_first_paper_id(paper_ids, final_chunks),
         )
 
-    # Stage 7 — 确定性证据选择 + LLM 调用 + 引用清理。
-    evidence_chunks, evidence_selection = select_evidence(
-        question,
-        final_chunks,
-        intent=intent_cfg.get("intent"),
-    )
+    # Stage 7 — 领域服务已确定证据集; QA 只负责答案生成与引用清理。
+    evidence_chunks = execution.evidence_chunks
+    evidence_selection = domain_trace["evidence_selection"]
     user = _build_user_prompt(question, evidence_chunks, abstain_result, wiki_context, language)
     system = _SYSTEM_ZH if language == "zh" else _SYSTEM
     try:

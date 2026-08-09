@@ -26,6 +26,7 @@ import paper_rag.config as config
 from paper_rag.observability import reset as metrics_reset
 from paper_rag.observability import snapshot as metrics_snapshot
 from paper_rag.rag import qa_agentic as qa
+from paper_rag.rag.evidence_retrieval import RetrievalExecution
 
 _ID_A = "a3f09b2c17d4e8f0a1b2"
 _ID_B = "b4e18c3d28e5f9a0b2c3"
@@ -372,3 +373,72 @@ def test_counters_incremented(monkeypatch):
     assert "paper_rag_qa_citations_total" in names
     hist = {h["name"] for h in metrics_snapshot()["histograms"]}
     assert "paper_rag_qa_latency_seconds" in hist
+
+
+def test_qa_agentic_delegates_retrieval_to_shared_domain_service(monkeypatch):
+    chunks = [_chunk(_ID_A), _chunk(_ID_B), _chunk(_ID_C)]
+    fake_chat, _ = _wire(monkeypatch, chunks_per_round=[chunks], reply=f"x [chunk:{_ID_A}]")
+    calls: list[dict] = []
+
+    def fake_retrieve(query, **kwargs):
+        calls.append({"query": query, **kwargs})
+        return RetrievalExecution(
+            retrieval_id="r_shared",
+            public_decision="confident",
+            internal_decision="confident",
+            candidate_chunks=chunks,
+            evidence_chunks=chunks[:2],
+            wiki_entries=[],
+            allowed_chunk_ids=[_ID_A, _ID_B],
+            trace={
+                "intent": {"intent": "reasoning", "top_k": 4, "max_iter": 2},
+                "iters": [{"query": query, "n_retrieved": 3, "reflect": None}],
+                "stopped_by": "answered",
+                "abstain": {"decision": "confident"},
+                "evidence_selection": {"strategy": "shared"},
+                "wiki_context": {"entries": [], "fingerprint": ""},
+            },
+        )
+
+    monkeypatch.setattr(qa, "retrieve_evidence", fake_retrieve)
+
+    out = qa.answer("What is X?")
+
+    assert len(calls) == 1
+    assert calls[0]["query"] == "What is X?"
+    assert out["trace"]["evidence_selection"] == {"strategy": "shared"}
+    assert fake_chat.calls
+
+
+def test_qa_cache_can_short_circuit_after_scope_validation(monkeypatch):
+    _conf(monkeypatch)
+    monkeypatch.setattr(
+        qa,
+        "_resolve_wiki_context_safe",
+        lambda question, paper_ids: {"entries": [], "fingerprint": ""},
+    )
+    monkeypatch.setattr(
+        qa,
+        "_check_cache",
+        lambda question, paper_ids, trace_id: {
+            "answer": "cached",
+            "citations": [],
+            "chunks": [],
+            "suspicious_citations": {"numeric": [], "author_year": [], "count": 0},
+            "trace": {
+                "intent": {"intent": "factual"},
+                "iters": [],
+                "stopped_by": "cache_hit",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        qa,
+        "retrieve_evidence",
+        lambda *args, **kwargs: pytest.fail("cache hit must skip retrieval"),
+    )
+
+    out = qa.answer("cached question")
+
+    assert out["answer"] == "cached"
+    assert out["trace"]["stopped_by"] == "cache_hit"

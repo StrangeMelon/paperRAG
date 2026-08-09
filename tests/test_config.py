@@ -62,6 +62,13 @@ def test_loads_default_config_as_typed_object(monkeypatch) -> None:
     assert loaded.qdrant.collection_wiki == "wiki_entries"
     assert loaded.llm.temperatures.answer == 0.2
     assert loaded.vision.local_max_new_tokens == 256
+    assert loaded.vision.max_concurrency == 4
+    assert loaded.wiki.worker.concurrency == 4
+    assert loaded.mcp.profile == "default"
+    assert loaded.mcp.max_running_retrievals == 2
+    assert loaded.mcp.max_queued_retrievals == 8
+    assert loaded.mcp.resources.gpu_total == 1
+    assert loaded.mcp.timeouts.qdrant_sec == 15
     assert Path(loaded.paths.data_root) == (config.PROJECT_ROOT / "data").resolve()
 
 
@@ -111,9 +118,10 @@ def test_explicit_path_has_highest_priority(
     loaded_from_explicit_path = config.load(explicit_path)
 
     assert loaded_from_explicit_path.embedding.model_name == "explicit-model"
-    assert Path(loaded_from_explicit_path.paths.data_root) == (
-        config.PROJECT_ROOT / "explicit-data"
-    ).resolve()
+    assert (
+        Path(loaded_from_explicit_path.paths.data_root)
+        == (config.PROJECT_ROOT / "explicit-data").resolve()
+    )
 
 
 @pytest.mark.parametrize("language", ["auto", "ch", "en"])
@@ -128,3 +136,13 @@ def test_mineru_language_rejects_unknown_mode() -> None:
 
     with pytest.raises(ValueError):
         config._MinerU(lang="fr")
+
+
+def test_mcp_config_rejects_invalid_capacity() -> None:
+    config = _config_module()
+
+    with pytest.raises(ValueError):
+        config._Mcp(max_running_retrievals=0)
+
+    with pytest.raises(ValueError):
+        config._Mcp(max_queued_retrievals=-1)

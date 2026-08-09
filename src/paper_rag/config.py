@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.yaml"
@@ -179,6 +179,7 @@ class _Vision(BaseModel):
     api_key: str | None = None
     model: str | None = None
     timeout_sec: int = 60
+    max_concurrency: int = Field(default=4, ge=1, le=32)
     # 智谱(GLM-4.6V)OpenAI 兼容口径: temperature 区间为 (0,1) 开区间, 0 不适用,
     # 故不照抄基准 api.py 写死的 temperature=0。
     temperature: float = Field(default=0.01, gt=0.0, lt=1.0)
@@ -195,11 +196,105 @@ class _Vision(BaseModel):
     cache_dir: str = "./data/index/vision_cache"
 
 
+class _WikiResolve(BaseModel):
+    """三级概念解析阈值。向量只负责召回, 合并判定权在 LLM 验证。"""
+
+    recall_floor: float = 0.60  # 低于此相似度不进候选(novel)
+    auto_merge_same_lang: float = 0.90  # 同语言且高于此值才允许免验证直接 match
+    short_label_max_ascii_chars: int = 4  # RL/CL/GAN/BERT 级缩写: 不许单独触发合并
+    short_label_max_cjk_chars: int = 1  # 中文单字才算短; 两字词已是完整概念
+
+
+class _WikiExtract(BaseModel):
+    max_concepts: int = 5
+    char_budget_zh: int = 4000  # 中文信息密度高, 字符预算低于英文
+    char_budget_en: int = 6000
+    exclude_sections: list[str] = Field(
+        default_factory=lambda: ["references", "bibliography", "参考文献"]
+    )
+
+
+class _WikiQualityGate(BaseModel):
+    """入队前过滤解析质量差的文档(如 mineru+broken 的征文通知), 防垃圾词条。"""
+
+    min_chunks: int = 15
+    skip_parsed_with: list[str] = Field(default_factory=lambda: ["mineru+broken", "pymupdf+broken"])
+
+
+class _WikiConsistency(BaseModel):
+    min_definition_chars_en: int = 20
+    min_definition_chars_zh: int = 12  # 中文信息密度高, 12 汉字已是完整定义
+
+
+class _WikiWorker(BaseModel):
+    batch_size: int = 10
+    concurrency: int = Field(default=4, ge=1, le=32)
+    max_attempts: int = 3
+    retry_backoff_sec: list[int] = Field(default_factory=lambda: [60, 600, 3600])
+
+
+class _WikiLlm(BaseModel):
+    """Wiki 专用 OpenAI 兼容模型; 未配置的连接字段回退到全局 llm。"""
+
+    base_url: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+    thinking: Literal["enabled", "disabled"] | None = None
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+    timeout_sec: float = Field(default=120.0, gt=0)
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_dedicated_endpoint(self) -> _WikiLlm:
+        if bool(self.base_url) != bool(self.api_key):
+            raise ValueError("wiki.llm.base_url and api_key must be configured together")
+        if self.base_url and not self.model:
+            raise ValueError("wiki.llm.model is required for a dedicated endpoint")
+        return self
+
+
 class _Wiki(BaseModel):
     enabled: bool = True
-    similarity_threshold: float = 0.85
-    rate_limit_hours: int = 24
     self_eval_threshold: float = 0.7
+    definition_rewrite_lock_hours: int = 24  # 只锁昂贵的定义重写; 关系新增不受限
+    llm: _WikiLlm = Field(default_factory=_WikiLlm)
+    resolve: _WikiResolve = Field(default_factory=_WikiResolve)
+    extract: _WikiExtract = Field(default_factory=_WikiExtract)
+    quality_gate: _WikiQualityGate = Field(default_factory=_WikiQualityGate)
+    consistency: _WikiConsistency = Field(default_factory=_WikiConsistency)
+    worker: _WikiWorker = Field(default_factory=_WikiWorker)
+
+
+class _McpResources(BaseModel):
+    gpu_total: int = Field(default=1, ge=1)
+    embedding: int = Field(default=1, ge=1)
+    reranker: int = Field(default=1, ge=1)
+    vision: int = Field(default=2, ge=1)
+    mineru: int = Field(default=1, ge=1)
+    llm: int = Field(default=4, ge=1)
+    sqlite_write: int = Field(default=1, ge=1)
+
+
+class _McpTimeouts(BaseModel):
+    sqlite_sec: float = Field(default=5, gt=0)
+    qdrant_sec: float = Field(default=15, gt=0)
+    llm_sec: float = Field(default=30, gt=0)
+    embedding_sec: float = Field(default=30, gt=0)
+    reranker_sec: float = Field(default=30, gt=0)
+    external_http_sec: float = Field(default=60, gt=0)
+
+
+class _Mcp(BaseModel):
+    profile: Literal["default", "admin"] = "default"
+    admission_timeout_sec: float = Field(default=2, gt=0)
+    retrieval_timeout_sec: float = Field(default=90, gt=0)
+    trace_ttl_sec: float = Field(default=1800, gt=0)
+    trace_max_entries: int = Field(default=1000, ge=1)
+    max_running_retrievals: int = Field(default=2, ge=1)
+    max_queued_retrievals: int = Field(default=8, ge=0)
+    thread_tokens: int = Field(default=8, ge=1)
+    resources: _McpResources = Field(default_factory=_McpResources)
+    timeouts: _McpTimeouts = Field(default_factory=_McpTimeouts)
 
 
 class _Logging(BaseModel):
@@ -221,6 +316,7 @@ class AppConfig(BaseModel):
     llm: _Llm = Field(default_factory=_Llm)
     vision: _Vision = Field(default_factory=_Vision)
     wiki: _Wiki = Field(default_factory=_Wiki)
+    mcp: _Mcp = Field(default_factory=_Mcp)
     logging: _Logging = Field(default_factory=_Logging)
 
 

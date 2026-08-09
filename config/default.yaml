@@ -104,6 +104,7 @@ vision:
   api_key: $VISION_API_KEY
   model: $VISION_MODEL
   timeout_sec: 60
+  max_concurrency: 4          # 单篇内 figure/table API 并发数; 主线程仍按 chunk 原序提交
   temperature: 0.01          # ZhipuAI/GLM accepts temperature in (0,1) only; 0 is rejected
   extra_body:                # GLM-4.6V defaults to thinking; reasoning can eat max_tokens
     thinking: {type: disabled}  # leaving content empty/truncated (verified 2026-08-05)
@@ -117,9 +118,62 @@ vision:
 
 wiki:
   enabled: true              # product default; set false only as an ops kill switch
-  similarity_threshold: 0.85
-  rate_limit_hours: 24
   self_eval_threshold: 0.7
+  definition_rewrite_lock_hours: 24  # 只锁定义重写, 论文/证据关系新增不受限
+  llm:
+    base_url: $WIKI_LLM_BASE_URL     # 专用端点; 必须与 api_key/model 一起设置
+    api_key: $WIKI_LLM_API_KEY
+    model: $WIKI_LLM_MODEL           # null 时回退全局 llm.chat_model
+    thinking: $WIKI_LLM_THINKING     # DeepSeek 官方端点: enabled | disabled
+    reasoning_effort: $WIKI_LLM_REASONING_EFFORT  # 原生 low/high/max; 兼容 medium/xhigh
+    timeout_sec: 120
+    extra_body: {}                   # 阿里云托管可改为 {enable_thinking: false}
+  resolve:
+    recall_floor: 0.60               # 向量召回下限, 低于此判 novel
+    auto_merge_same_lang: 0.90       # 同语言高相似才免 LLM 验证直接合并
+    short_label_max_ascii_chars: 4   # RL/CL/GAN/BERT 级缩写不许单独触发合并
+    short_label_max_cjk_chars: 1     # 中文单字才算短标签
+  extract:
+    max_concepts: 5
+    char_budget_zh: 4000             # 中文按字符计, 信息密度高于英文
+    char_budget_en: 6000
+    exclude_sections: [references, bibliography, 参考文献]
+  quality_gate:
+    min_chunks: 15                   # 低于此块数不建词条(征文通知类文档)
+    skip_parsed_with: ["mineru+broken", "pymupdf+broken"]
+  consistency:
+    min_definition_chars_en: 20
+    min_definition_chars_zh: 12
+  worker:
+    batch_size: 10
+    concurrency: 4            # 同时处理的论文数; 受模型端点并发/限流能力约束
+    max_attempts: 3
+    retry_backoff_sec: [60, 600, 3600]
+
+mcp:
+  profile: default
+  admission_timeout_sec: 2
+  retrieval_timeout_sec: 90
+  trace_ttl_sec: 1800
+  trace_max_entries: 1000
+  max_running_retrievals: 2
+  max_queued_retrievals: 8
+  thread_tokens: 8
+  resources:
+    gpu_total: 1
+    embedding: 1
+    reranker: 1
+    vision: 2
+    mineru: 1
+    llm: 4
+    sqlite_write: 1
+  timeouts:
+    sqlite_sec: 5
+    qdrant_sec: 15
+    llm_sec: 30
+    embedding_sec: 30
+    reranker_sec: 30
+    external_http_sec: 60
 
 logging:
   level: INFO

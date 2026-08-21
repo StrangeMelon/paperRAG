@@ -43,8 +43,19 @@ def _stub_engine(monkeypatch, *, fail_on: set[str] | None = None, status: str = 
                 pdf_path=identifier,
             )
 
-    def _ingest(result, *, force=False):
+    def _ingest(result, *, force=False, timings=None):
         seen[-1]["force"] = force
+        if timings is not None:
+            timings.update(
+                {
+                    "parse_seconds": 0.1,
+                    "chunk_seconds": 0.2,
+                    "vision_seconds": 0.0,
+                    "embedding_seconds": 0.3,
+                    "incremental_update_seconds": 0.4,
+                    "total_seconds": 1.0,
+                }
+            )
         return {"paper_id": result.meta.paper_id, "status": status, "chunks": 5}
 
     monkeypatch.setattr("paper_rag.ingest.local_source.LocalSource", _FakeLocal)
@@ -139,6 +150,24 @@ def test_report_written_with_failure_details(tmp_path, monkeypatch):
     assert by_file["b.pdf"]["status"] == "failed"
     assert "parse boom" in by_file["b.pdf"]["error"]
     assert data["summary"]["failed"] == 1
+
+
+def test_report_contains_incremental_stage_timings(tmp_path, monkeypatch):
+    _mk_pdfs(tmp_path, "a.pdf")
+    _stub_engine(monkeypatch)
+    report = tmp_path / "timings.json"
+
+    ingest_batch.main([str(tmp_path), "--report", str(report)])
+
+    result = json.loads(report.read_text(encoding="utf-8"))["results"][0]
+    assert result["timings"] == {
+        "parse_seconds": 0.1,
+        "chunk_seconds": 0.2,
+        "vision_seconds": 0.0,
+        "embedding_seconds": 0.3,
+        "incremental_update_seconds": 0.4,
+        "total_seconds": 1.0,
+    }
 
 
 def test_force_and_filename_title_passthrough(tmp_path, monkeypatch):

@@ -68,12 +68,24 @@ class _FakeQdrant:
     def __init__(self):
         self.ops: list[tuple] = []
 
+    def list_chunks_for_paper(self, paper_id: str) -> list[dict]:
+        self.ops.append(("snapshot", paper_id))
+        return []
+
     def delete_chunks_for_paper(self, paper_id: str) -> None:
         self.ops.append(("delete", paper_id))
 
     def upsert_chunks(self, chunks, vectors) -> int:
         self.ops.append(("upsert", len(chunks), len(vectors)))
         return len(chunks)
+
+    def overwrite_chunk_payload(self, item) -> None:
+        self.ops.append(("payload", item["chunk_id"]))
+
+    def delete_points(self, point_ids) -> int:
+        ids = list(point_ids)
+        self.ops.append(("delete_ids", len(ids)))
+        return len(ids)
 
 
 def _meta(**kw) -> PaperMeta:
@@ -126,7 +138,11 @@ def _wire(
         ip, "_sync_fts5_nonfatal", lambda pid: fake_qd.ops.append(("fts_sync", pid))
     )
     monkeypatch.setattr(ip, "parse_pdf", lambda pid, path: (parsed, "mineru"))
-    monkeypatch.setattr(ip, "build_chunks", lambda pid, d, title: _sections_chunks(names))
+    monkeypatch.setattr(
+        ip,
+        "build_chunks",
+        lambda pid, d, title, **kwargs: _sections_chunks(names),
+    )
     monkeypatch.setattr(
         ip, "bge_m3", SimpleNamespace(encode=lambda texts: [[0.0] * 4 for _ in texts])
     )
@@ -201,11 +217,13 @@ def test_happy_path_states_card_vectors_and_replacement(monkeypatch, tmp_path: P
 
     assert out["status"] == "done"
     assert out["chunks"] == 5  # 4 正文 + 1 元数据卡片
-    # wiki 持久化入队: submit 的返回即报告; 指纹是排序 chunk_id 集合的 sha1
+    # wiki 持久化入队: submit 的返回即报告; 指纹包含 chunk_id 与 content_id
     assert out["wiki"]["queued"] is True
     (wiki_call,) = fake_sql.wiki_calls
-    chunk_ids = sorted(c["chunk_id"] for c in fake_sql.saved[1])
-    assert wiki_call["fingerprint"] == hashlib.sha1("\n".join(chunk_ids).encode()).hexdigest()
+    fingerprint_values = sorted(f"{c['chunk_id']}\t{c['content_id']}" for c in fake_sql.saved[1])
+    assert (
+        wiki_call["fingerprint"] == hashlib.sha1("\n".join(fingerprint_values).encode()).hexdigest()
+    )
 
     assert fake_sql.upserted["status"] == "fetched"
     status_names = [s for s, _ in fake_sql.statuses]
@@ -217,11 +235,52 @@ def test_happy_path_states_card_vectors_and_replacement(monkeypatch, tmp_path: P
     assert [r[:2] for r in fake_sql.runs] == [
         ["parse", "ok"],
         ["chunk", "ok"],
+        ["qdrant_snapshot", "ok"],
         ["embed", "ok"],
         ["index", "ok"],
     ]
-    assert fake_qd.ops == [("delete", "p1"), ("upsert", 5, 5), ("fts_sync", "p1")]
-    # 先删后插的替换语义; fts5 增量同步在向量替换之后接线(hybrid 课, ADR-0001 规模修订)
+    assert fake_qd.ops == [
+        ("snapshot", "p1"),
+        ("upsert", 5, 5),
+        ("delete_ids", 0),
+        ("fts_sync", "p1"),
+    ]
+
+
+def test_ingest_records_stage_timings(monkeypatch, tmp_path: Path) -> None:
+    _wire(monkeypatch, tmp_path)
+    timings: dict[str, float] = {}
+
+    out = ip.ingest(
+        FetchResult(meta=_meta(), pdf_path="/tmp/x.pdf"),
+        timings=timings,
+    )
+
+    assert out["timings"] is timings
+    assert {
+        "parse_seconds",
+        "chunk_seconds",
+        "vision_seconds",
+        "embedding_seconds",
+        "incremental_update_seconds",
+        "total_seconds",
+    } <= set(timings)
+    assert all(value >= 0 for value in timings.values())
+
+
+def test_ingest_returns_timings_even_without_timing_argument(monkeypatch, tmp_path: Path) -> None:
+    _wire(monkeypatch, tmp_path)
+
+    out = ip.ingest(FetchResult(meta=_meta(), pdf_path="/tmp/x.pdf"))
+
+    assert out["timings"]
+    assert {
+        "parse_seconds",
+        "chunk_seconds",
+        "embedding_seconds",
+        "index_seconds",
+        "total_seconds",
+    } <= set(out["timings"])
 
 
 def test_zh_language_flows_to_grading_and_card(monkeypatch, tmp_path: Path) -> None:

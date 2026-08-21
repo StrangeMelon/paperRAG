@@ -186,6 +186,73 @@ def test_citations_validated_against_evidence_chunks_not_pool(monkeypatch):
     assert _ID_C not in out["answer"]
 
 
+def test_regular_question_excludes_reference_from_agentic_evidence(monkeypatch):
+    reference = {
+        **_chunk(_ID_A),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    body = {**_chunk(_ID_B, paper="p2"), "section": "Methods"}
+    _wire(monkeypatch, chunks_per_round=[[reference, body]], reply=f"body [chunk:{_ID_B}]")
+
+    out = qa.answer("How does the method work?")
+
+    assert [chunk["chunk_id"] for chunk in out["evidence_chunks"]] == [_ID_B]
+    assert out["citations"] == [_ID_B]
+
+
+def test_agentic_forwards_original_reference_intent_to_followup_round(monkeypatch):
+    insufficient = {
+        "sufficiency": "insufficient",
+        "missing": "details",
+        "follow_up": "Which specific works?",
+        "score": 0.2,
+    }
+    _wire(
+        monkeypatch,
+        chunks_per_round=[[_chunk(_ID_A)], [_chunk(_ID_B)]],
+        reflects=[insufficient],
+    )
+    calls: list[tuple[str, bool | None]] = []
+    rounds = [[_chunk(_ID_A)], [_chunk(_ID_B)]]
+
+    def retrieve_round(query, paper_ids, top_k, *, reference_intent=None, **kwargs):
+        calls.append((query, reference_intent))
+        return rounds.pop(0)
+
+    monkeypatch.setattr(qa, "_retrieve_round", retrieve_round)
+
+    qa.answer("Which papers are cited by this article?")
+
+    assert calls == [
+        ("Which papers are cited by this article?", True),
+        ("Which specific works?", True),
+    ]
+
+
+def test_answer_forwards_ragas_retrieval_overrides(monkeypatch):
+    chunks = [_chunk(_ID_A), _chunk(_ID_B), _chunk(_ID_C)]
+    _wire(monkeypatch, chunks_per_round=[chunks])
+    calls: list[dict] = []
+
+    def retrieve_round(query, paper_ids, top_k, **kwargs):
+        calls.append({"top_k": top_k, **kwargs})
+        return chunks
+
+    monkeypatch.setattr(qa, "_retrieve_round", retrieve_round)
+
+    qa.answer(
+        "What is X?",
+        top_k_override=11,
+        query_rewrite_enabled=False,
+        evaluation_parallel=True,
+    )
+
+    assert calls[0]["top_k"] == 11
+    assert calls[0]["rewrite_enabled"] is False
+    assert calls[0]["evaluation_parallel"] is True
+
+
 # ---------- 切片 1: 循环编排 ----------
 
 

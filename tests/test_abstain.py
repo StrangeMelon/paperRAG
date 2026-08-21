@@ -105,6 +105,21 @@ def test_rerank_preferred_over_dense():
     assert score == pytest.approx(0.9)
 
 
+def test_effective_score_precedes_raw_rerank_score():
+    chunks = [
+        {
+            "chunk_id": "reference",
+            "score_effective": 0.05,
+            "score_rerank": 0.95,
+        }
+    ]
+
+    result = decide(chunks)
+
+    assert result["score_field"] == "score_effective"
+    assert result["decision"] == DECISION_NO_EVIDENCE
+
+
 def test_first_available_field_serves_whole_list():
     # 只有一块带 rerank, 其余只带 dense: 字段选 rerank, 其余块不参与均值,
     # 不允许跨字段混用(不同量纲的均值无意义)。

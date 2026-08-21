@@ -108,13 +108,16 @@ def main(argv: list[str] | None = None) -> int:
         entry: dict = {"file": str(pdf)}
         try:
             result = LocalSource(title=pdf.stem).fetch(str(pdf))
-            out = ingest(result, force=args.force)
+            timings: dict[str, float] = {}
+            out = ingest(result, force=args.force, timings=timings)
             status = out.get("status", "failed")
             entry.update(
                 paper_id=out.get("paper_id"),
                 status=status,
                 chunks=out.get("chunks"),
                 reason=out.get("reason"),
+                incremental=out.get("incremental", {}),
+                timings=out.get("timings", timings),
             )
         except Exception as e:  # 逐篇隔离: 单篇失败不中断整批
             status = "failed"
@@ -127,7 +130,8 @@ def main(argv: list[str] | None = None) -> int:
             f"[{i}/{len(pdfs)}] {pdf.name} -> {entry['status']}"
             + (f" ({entry.get('chunks')} chunks)" if entry.get("chunks") else "")
             + (f" [{entry.get('reason')}]" if entry.get("reason") else "")
-            + f" {entry['seconds']}s",
+            + f" {entry['seconds']}s"
+            + _timing_suffix(entry.get("timings")),
             flush=True,
         )
 
@@ -149,6 +153,21 @@ def main(argv: list[str] | None = None) -> int:
         for f in failed:
             print(f"  {f}")
     return 1 if counts["failed"] else 0
+
+
+def _timing_suffix(timings: dict | None) -> str:
+    """格式化阶段耗时, 供 CLI 和真实验收脚本共享。"""
+    if not timings:
+        return ""
+    names = (
+        "parse_seconds",
+        "chunk_seconds",
+        "vision_seconds",
+        "embedding_seconds",
+        "incremental_update_seconds",
+        "total_seconds",
+    )
+    return " " + " ".join(f"{name}={timings[name]:.3f}s" for name in names if name in timings)
 
 
 if __name__ == "__main__":

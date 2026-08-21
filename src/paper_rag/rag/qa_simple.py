@@ -19,8 +19,10 @@ b) 无证据短路文案按语言路由("(未检索到证据)" / 基准英文原
 
 from __future__ import annotations
 
+from .. import config as cfg
 from ..retrieve.dense import retrieve
 from ..retrieve.format import format_evidence
+from ..retrieve.reference_policy import detect_reference_intent, filter_answer_evidence
 from ..utils.logger import get_logger
 from .citation_check import (
     detect_suspicious_citations,
@@ -54,7 +56,15 @@ _NO_EVIDENCE_ZH = "(未检索到证据)"
 
 def answer(question: str, *, top_k: int = 8, paper_ids: list[str] | None = None) -> dict:
     lang = _query_language(question)
-    chunks = retrieve(question, top_k=top_k, paper_ids=paper_ids)
+    reference_cfg = cfg.load().retrieve.references
+    raw_chunks = retrieve(question, top_k=top_k * 3, paper_ids=paper_ids)
+    chunks = filter_answer_evidence(
+        raw_chunks,
+        reference_intent=detect_reference_intent(question),
+        enabled=reference_cfg.enabled,
+        exclude_from_evidence=reference_cfg.exclude_from_evidence,
+        legacy_section_fallback=reference_cfg.legacy_section_fallback,
+    )[:top_k]
     if not chunks:
         return {
             "answer": _NO_EVIDENCE_ZH if lang == "zh" else _NO_EVIDENCE,

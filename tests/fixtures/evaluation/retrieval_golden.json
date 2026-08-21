@@ -1,0 +1,460 @@
+{
+  "schema_version": "retrieval.v1",
+  "name": "paper-rag-retrieval-golden-single-paper-50",
+  "description": "纯检索单论文直接证据评测集：共 50 道题，每题只涉及一篇论文并固定标注 2 个直接回答 Query 的 expected Chunk，不包含跨论文检索或多跳推理。reference_answer 仅供人工审阅。",
+  "corpus": {
+    "selection": "all_indexed"
+  },
+  "test_cases": [
+    {
+      "id": "hard-single-001",
+      "query": "在去中心化电力调频设计中，调频积分如何产生、兑换和流通，算例验证了哪些系统效果？",
+      "reference_answer": "调频积分按机组调频表现生成，可向调度中心转账兑换现值，也可依据智能合约在机组间交易。算例显示分布式调频系统能够完成调频任务和积分结算，并提升机组参与积极性及资源利用效率。",
+      "expected_chunk_ids": ["5115dfd6ffa41c1cfe63", "47a73f1cf2cd878a3f71"],
+      "expected_paper_ids": ["sha1:006f2ca77aea21a555fc1223850a3208d29fd59a"],
+      "search_scope": {"paper_ids": ["sha1:006f2ca77aea21a555fc1223850a3208d29fd59a", "sha1:1b3c7c7f412e60e46454da8aa8ff4e7a68b0ef19", "sha1:2f978ce64d43ab6622e440491397950802e0a8eb", "sha1:543b1b24bf300aea5a94fb6cf7aa4534a25689d2", "sha1:90e19f91f7ef85b889ba8ad653bcc60287ad7a98"]},
+      "tags": ["zh", "multi-section", "power", "hard-scoped"]
+    },
+    {
+      "id": "hard-single-002",
+      "query": "多接收者多消息签密方案如何抵抗持续性 KGC 攻击，其区块链密钥更新部署又如何兼顾扩展性与安全隔离？",
+      "reference_answer": "方案由多个 KGC 通过门限秘密分享管理主密钥并周期更新子秘密，以抵抗持续性攻击。部署时可由以太坊全节点与多个 KGC 组成安全域，异地扩展多个安全域，同时只暴露全节点实现内外网隔离并降低其他 KGC 的资源消耗。",
+      "expected_chunk_ids": ["06684df1df92ec33dce4", "5f321cd39c8c7ff5486d"],
+      "expected_paper_ids": ["sha1:0715582b4d6744d237ddd5405be85594a3d8ab7b"],
+      "search_scope": {"paper_ids": ["sha1:0715582b4d6744d237ddd5405be85594a3d8ab7b", "sha1:5afbb80f12a5f9aacfe19ba82223873f1f538e36", "sha1:8c7c4eb60808de752b029275aa4b4495c28e877a", "sha1:d5d8bd18d847253a0f0f6a0a4d776e9cb5289a74", "sha1:f99c40ac02f47054aceb5820b0d7300f2ec85048"]},
+      "tags": ["zh", "multi-section", "cryptography", "hard-scoped"]
+    },
+    {
+      "id": "hard-single-003",
+      "query": "Mictract 如何把 DevOps 引入智能合约运维，Marbles 案例和志愿者实验分别证明了什么？",
+      "reference_answer": "Mictract 通过微服务化、容器编排和 DevOps 工具支持区块链网络搭建、合约部署、升级、监控与测试。Marbles 案例验证改造后合约能正确运行，志愿者实验显示脚本部署平均比 Mictract 多耗时 225.6 秒。",
+      "expected_chunk_ids": ["4be84629605aafc28274", "1be4f0f85589c21df9e1"],
+      "expected_paper_ids": ["sha1:0ca35bd6aa001e1a5caa948391f4036330ace159"],
+      "search_scope": {"paper_ids": ["sha1:0ca35bd6aa001e1a5caa948391f4036330ace159", "sha1:14658a29ac83b2978cb4e30533ccecaab136673f", "sha1:3491795f0152c2e29541e88c22182129b88b1645", "sha1:773a3ccba63620b3506fdf0db1c975af37440c7a", "sha1:dfebe8eb31cb9189fb7f6609c64ba022205342a4"]},
+      "tags": ["zh", "multi-section", "smart-contract", "hard-scoped"]
+    },
+    {
+      "id": "hard-single-004",
+      "query": "粮油食品区块链追溯既要解决传统体系的哪些问题，又有哪些共识机制被用于提高上链安全性和效率？",
+      "reference_answer": "传统体系存在数据中心化、信息不透明、易伪造和信息孤岛。相关研究采用 PoL、带信誉监督的 CSBFT，以及针对主从多链设计的改进共识机制，以降低资源浪费并改善溯源信息上链的安全性和时延。",
+      "expected_chunk_ids": ["83fdc7a43bd85c63f847", "0fd26747cae9ea959f0d"],
+      "expected_paper_ids": ["sha1:1117e1ec66a9522842a67c2819ef20a6b69b25bd"],
+      "search_scope": {"paper_ids": ["sha1:1117e1ec66a9522842a67c2819ef20a6b69b25bd", "sha1:9cfc027bb5676353a85a516ad6135c31acb4ae95", "sha1:b268709d345e466820bae4c544860fe34595e1e1", "sha1:b7af2a6f2c5bf626e1a333822dfaddfda4351b5b", "sha1:c97c0da1a762402375fb16057bb9577124eb1a32"]},
+      "tags": ["zh", "multi-section", "traceability", "hard-scoped"]
+    },
+    {
+      "id": "hard-single-005",
+      "query": "无可信第三方的公平合约交换协议如何改造区块链交易结构，并以什么条件确认合约最终生效？",
+      "reference_answer": "协议把交易内容替换为待签合约，各参与方依次构造链接交易单并借助链内共识完成不可抵赖签名。只有 N+1 次顺序交易单全部写入全局账本才视为合约生效，其他情况均为无效交换。",
+      "expected_chunk_ids": ["ba089b759f9ee3c77d37", "971ff70337dd0e10b73a"],
+      "expected_paper_ids": ["sha1:14658a29ac83b2978cb4e30533ccecaab136673f"],
+      "search_scope": {"paper_ids": ["sha1:14658a29ac83b2978cb4e30533ccecaab136673f", "sha1:0ca35bd6aa001e1a5caa948391f4036330ace159", "sha1:3491795f0152c2e29541e88c22182129b88b1645", "sha1:ce74dbe337385bd704660fcfbd3872a9bc0484e1", "sha1:f446bc12e77976cdf0e8fe05a4e8346ad65cf8a0"]},
+      "tags": ["zh", "multi-section", "smart-contract", "hard-scoped"]
+    },
+    {
+      "id": "hard-single-006",
+      "query": "拟态区块链的安全设计包含哪两类动态异构机制，其签名处理性能受到什么因素制约？",
+      "reference_answer": "方案包含动态异构共识机制和动态异构冗余签名算法，借鉴 DHR 与密码抽签。签名侧同时组合 SM2、CFS、RSA 等异构算法，整体快速处理能力会受其中验证速度较慢的算法和冗余执行方式制约。",
+      "expected_chunk_ids": ["12c8ab522ff3f7286649", "a31a05bf1c1b5b52d7bd"],
+      "expected_paper_ids": ["sha1:18cc5f8458568ce3e9235555263ec9ccace06f44"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "security", "global"]
+    },
+    {
+      "id": "hard-single-007",
+      "query": "偏好驱动的电力资源配置如何划分用户偏好，实验又怎样说明它提高了清洁能源消纳？",
+      "reference_answer": "偏好分为环境友好型、输电资源节约型和经济高效型，并通过能量信息匹配与综合评估完成配置。累积交易实验表明该模型的清洁能源占比高于对照模型，且在供能习惯不变时占比持续上升。",
+      "expected_chunk_ids": ["b0cf8437bca722684a8f", "aba643969cd6f5c51c40"],
+      "expected_paper_ids": ["sha1:1b3c7c7f412e60e46454da8aa8ff4e7a68b0ef19"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "power", "global"]
+    },
+    {
+      "id": "hard-single-008",
+      "query": "水产品跨链模型为何选择公证人组和两阶段交易流程，它在大交易量下达到了什么性能？",
+      "reference_answer": "公证人组负责跨链验证与传输，节点互补避免单点故障；两阶段流程补充超时和失败处理，满足一致性与原子性。实验中平均成功率超过 99%，平均延迟约 0.21 秒。",
+      "expected_chunk_ids": ["288a017ca5b3bbed0767", "a93d900778831f5bde13"],
+      "expected_paper_ids": ["sha1:2033613147f37d0966ef3623f3f55462a28aed5b"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "cross-chain", "global"]
+    },
+    {
+      "id": "hard-single-009",
+      "query": "条件广播代理重加密方案如何选择代理节点并保护重加密密钥，具体密钥重构需要满足什么门限？",
+      "reference_answer": "方案让区块链节点轮流担任代理，并用融合信誉的委托权益证明选择高信誉节点。重加密密钥通过 Shamir 秘密共享拆成 N 个片段，代理收集并验证，只有取得超过 T 个片段后才能拼接并执行重加密。",
+      "expected_chunk_ids": ["a918a6572f8c9462189b", "80cafb8143f90fbb17b8"],
+      "expected_paper_ids": ["sha1:257afa1061325dd207c5162baa9185bfa29e4c48"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "cryptography", "global"]
+    },
+    {
+      "id": "hard-single-010",
+      "query": "可监管匿名认证中的 CA、用户和验证者分别做什么，选择性属性披露与欺诈追踪如何共存？",
+      "reference_answer": "CA 生成发行和追踪密钥、注册用户并颁发属性证书；验证者指定必须披露的属性；用户签名证书并隐藏无关属性。正常认证时保持匿名和最小披露，发生欺诈时 CA 可利用监管能力追责。",
+      "expected_chunk_ids": ["a49e5292124e7ad2e8b4", "c4e014d15f2ec2cbdd0a"],
+      "expected_paper_ids": ["sha1:2b262075f9f609b7b622843e1d0db3296cfa112e"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "identity", "global"]
+    },
+    {
+      "id": "hard-single-011",
+      "query": "异构能源区块链交易模型如何组织不同能源子链、保障交易可靠性，并存在哪些待解决问题？",
+      "reference_answer": "模型为不同能源交易类型建立联盟交易子链，用价格约束匹配拍卖和智能合约保证清洁能源优先，并通过认证中心与 DSO 双重认证确保可靠性。尚需研究共识耗时是否满足交易需求及节点间价格博弈。",
+      "expected_chunk_ids": ["3522c7e7c5edb6ae799b", "4f718a472fa9a4151dbf"],
+      "expected_paper_ids": ["sha1:2f978ce64d43ab6622e440491397950802e0a8eb"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "energy", "global"]
+    },
+    {
+      "id": "hard-single-012",
+      "query": "SPESC 到 Solidity 的智能合约转化采用什么分层与映射规则，实际运行测试检查了哪些成本？",
+      "reference_answer": "系统分为高级智能合约、智能合约和机器代码执行三层，并将 SPESC 当事人与主体部分映射到 Solidity 子合约。运行测试核对合约状态、账户余额、程序执行 gas 和链上存储 gas。",
+      "expected_chunk_ids": ["07a2f09160d15c8b8334", "c63be7296699d4f359fa"],
+      "expected_paper_ids": ["sha1:3491795f0152c2e29541e88c22182129b88b1645"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "smart-contract", "global"]
+    },
+    {
+      "id": "hard-single-013",
+      "query": "LPWS 在任务预算约束下如何完成隐私位置提交、参与者选择、质量评估和激励闭环？",
+      "reference_answer": "参与者用保序加密与 Merkle 树隐藏精确位置并提交位置记录；任务发布者验证位置形成候选集，链上节点用动态规划选人；数据提交后协作完成质量评估，再按规则支付报酬和更新信誉。",
+      "expected_chunk_ids": ["11779d2157524cbcefe3", "d0953adb5a529606ba65"],
+      "expected_paper_ids": ["sha1:39727d6bad726d5b125792f4775975a4272a4b60"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "crowdsensing", "global"]
+    },
+    {
+      "id": "hard-single-014",
+      "query": "车联网 SSI 方案如何处理凭证创建、隐私与撤销，其性能实验相对其他方案表现怎样？",
+      "reference_answer": "方案用门限 BLS 和 PBFT 创建凭证，用秘密共享及零知识证明保护隐私，用密码学累加器支持撤销。用户数为 5 时总体耗时 311.8 ms，低于三个对比方案的 433.3 至 606.85 ms。",
+      "expected_chunk_ids": ["08af3654cd6220913326", "1a8ee40e6a7431c4f87f"],
+      "expected_paper_ids": ["sha1:4048e89e718836a16c9d298c7af22f01689d102b"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "identity", "global"]
+    },
+    {
+      "id": "hard-single-015",
+      "query": "密态征信 SVM 训练如何保证准确率不受影响，与 SPSVM 相比为何更具实用性？",
+      "reference_answer": "实验表明在安全性得到保证时密态数据仍可用于训练且模型准确率不受影响。SPSVM 的核矩阵需要大量密态欧氏距离计算，耗时随样本规模快速增长并依赖第三方，因此本文机制更适合实际共享场景。",
+      "expected_chunk_ids": ["1ef42b92da2094eba8fa", "3fb47ea4b09464a4dbe6"],
+      "expected_paper_ids": ["sha1:46c58047b5737142d56083224af7e2b76ae16ebf"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "machine-learning", "global"]
+    },
+    {
+      "id": "hard-single-016",
+      "query": "MWSD 如何分阶段培养群智感知工人，最终在数据质量和平台效用上比 BNTC 提高多少？",
+      "reference_answer": "算法为每个培养阶段设置持续时间和信誉阈值，根据当前质量及下一阶段达标概率筛选继续培养的工人。与 BNTC 相比，缺乏优质工人的任务数据质量提高 24%，长期平台效用提高 17%。",
+      "expected_chunk_ids": ["1b9abc07b1d5915476d0", "a924426fa0fa89ae1027"],
+      "expected_paper_ids": ["sha1:4b68c25ce51d9419a4b85914b7a6353fb2580608"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "crowdsensing", "global"]
+    },
+    {
+      "id": "hard-single-017",
+      "query": "园区多边用电权交易如何解决临时增容和闲置容量问题，仿真覆盖了哪些供需场景？",
+      "reference_answer": "机制通过双向拍卖与端对端交易盘活闲置电力容量，满足企业临时增容并避免园区外线扩建；智能合约部署在以太坊私链，仿真覆盖供需平衡、供小于求和供大于求三种场景。",
+      "expected_chunk_ids": ["b653124786113e7dc0d3", "433b6bfd56c42ebbd249"],
+      "expected_paper_ids": ["sha1:543b1b24bf300aea5a94fb6cf7aa4534a25689d2"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "power", "global"]
+    },
+    {
+      "id": "hard-single-018",
+      "query": "SM2 衍生签密在车载网中承担哪些安全功能，标准签密流程包含哪些核心算法？",
+      "reference_answer": "SM2 衍生签密在单一逻辑步骤中同时提供机密性与认证性，并结合智能合约管理证书、追踪和撤销恶意车辆。标准流程包括初始化、密钥生成、发送者签密和接收者解签密。",
+      "expected_chunk_ids": ["d5060df76d21c56e06d1", "e11469d53cdd6234d300"],
+      "expected_paper_ids": ["sha1:5afbb80f12a5f9aacfe19ba82223873f1f538e36"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "vehicular-network", "global"]
+    },
+    {
+      "id": "hard-single-019",
+      "query": "可修改区块链怎样在不破坏链间链接的情况下修改数据，POSpace 记账权竞争又如何体现存储优势？",
+      "reference_answer": "超过阈值的节点同意后，方案借助陷门单向函数修改区块数据而保持其他数据和链接关系不变。POSpace 中矿工响应随机顶点标签挑战，存储空间越大、预存标签越多，返回越快且竞争成功概率越高。",
+      "expected_chunk_ids": ["6c793efa5f858cf1e6b6", "4427bbd5c3d21c1138da"],
+      "expected_paper_ids": ["sha1:5f946645b04893753dadc56d5485348ab81ee4a4"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "editable-blockchain", "global"]
+    },
+    {
+      "id": "hard-single-020",
+      "query": "联盟链账本修改方案为何从门限环签名转向多中心变色龙哈希，新方案达到什么性能？",
+      "reference_answer": "门限环签名方案依赖特定区块结构、只能整块删除且修改记录增加主链空间。新方案让权限节点协作生成变色龙哈希密钥并设计多种私钥共识机制，原型链最佳压缩率约 30%，算法整体达到毫秒级。",
+      "expected_chunk_ids": ["53f5706704b54e6d302b", "d5bfa85a2d5336d633ce"],
+      "expected_paper_ids": ["sha1:65a7996265768e2b9e3a2043dd07f6c2cc62afd7"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "editable-blockchain", "global"]
+    },
+    {
+      "id": "hard-single-021",
+      "query": "GDPR 研究如何用技术方案规范跨境数据流，并通过隐私设计框架实现数据追踪、完整性评估和泄露问责？",
+      "reference_answer": "技术方案使用深度学习识别云端个人信息、以地理围栏规范跨境流动，并评估网站跟踪和移动应用的跨境合规性。隐私设计框架依据 GDPR 原则记录所有接收数据的实体，形成可遍历的跟踪树，用于评估数据完整性和追究泄露责任。",
+      "expected_chunk_ids": ["415adb4f54c316011e53", "9c4233da78f7afbf1789"],
+      "expected_paper_ids": ["sha1:6b239adf2bb19a7ab039313662d25f7fa439b5cc"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "privacy", "global"]
+    },
+    {
+      "id": "hard-single-022",
+      "query": "分布式数字资产交易平台用哪些原则评估现有方案，自动监管模型如何从链上数据生成报告？",
+      "reference_answer": "研究基于 PFMI 提出五项基本原则，从通信与交换协议两方面评估平台。监管模型由区块链、执行引擎和法规库组成，读取链上交易、执行规则并为命中监管条件的交易自动生成报告。",
+      "expected_chunk_ids": ["db5d09442b035166836f", "7e3c141fa2024313d4f6"],
+      "expected_paper_ids": ["sha1:6dcbb7b77a629d1b159364113cd7e4a3fcc0af33"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "digital-assets", "global"]
+    },
+    {
+      "id": "hard-single-023",
+      "query": "电子病历共享方案中，IPFS、代理重加密、CP-ABE 和 Asmuth-Bloom 秘密共享各自承担什么职责，门限恢复为何安全？",
+      "reference_answer": "病历经代理重加密存入 IPFS，地址上链；CP-ABE 执行患者定义的属性访问策略；Asmuth-Bloom 把密钥分给多方，只有满足门限的参与者协作才能恢复密钥，少于门限无法获得有效秘密。",
+      "expected_chunk_ids": ["610b622f27667db205e4", "1f7914712f559b26a8e7"],
+      "expected_paper_ids": ["sha1:7292bca58d77e79e14b2186afaa4b221a10b57bc"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "healthcare", "global"]
+    },
+    {
+      "id": "hard-single-024",
+      "query": "字节码关键路径漏洞检测如何从控制流图得到检测结果，三类漏洞和实验准确率分别是什么？",
+      "reference_answer": "方法从字节码构建执行控制流图，按漏洞特征定义关键指令和规则、生成关键路径，再做规则匹配。它检测可重入、委托调用和时间戳依赖漏洞，在 8000 个以太坊合约上准确率为 93.75%。",
+      "expected_chunk_ids": ["ec363aee30d33600d793", "66ae266f81e408be8722"],
+      "expected_paper_ids": ["sha1:773a3ccba63620b3506fdf0db1c975af37440c7a"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "smart-contract", "global"]
+    },
+    {
+      "id": "hard-single-025",
+      "query": "域间路由状态因果链如何记录和追溯不稳定事件，实验怎样验证它不需要修改 BGP？",
+      "reference_answer": "方法把描述路由状态及转移的标识随更新传播并写入区块链，形成去中心化防篡改因果链，再据此追溯失效链路或策略冲突自治域。软件路由器经典拓扑实验验证了在不修改 BGP 时也能及时定位源头。",
+      "expected_chunk_ids": ["a875ae43e0987dc7d81b", "01669842e33dba296dc8"],
+      "expected_paper_ids": ["sha1:7d44b5b5d744f90b12ec38cb1ff6fbce7e5d4200"],
+      "search_scope": null,
+      "tags": ["zh", "multi-section", "network", "global"]
+    },
+    {
+      "id": "hard-single-026",
+      "query": "中国农产品质量安全可追溯体系经历了哪些发展阶段，未来将怎样利用多模态数据、人工智能和新型区块链实现智能化？",
+      "reference_answer": "体系经历制度框架初建、平台全面推广和数字智能化转型三个阶段。未来将融合多源异构数据和多模态风险预警，利用大模型、时空图网络、数字孪生、量子区块链及跨链协同建设智能化追溯体系。",
+      "expected_chunk_ids": ["ac30a92943ebc907503a", "c811d79116a9f37db880"],
+      "expected_paper_ids": ["sha1:9cfc027bb5676353a85a516ad6135c31acb4ae95"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "traceability", "global"]
+    },
+    {
+      "id": "hard-single-027",
+      "query": "零知识智能合约投票系统如何验证选票有效性并保护投票内容，性能实验如何评价投票和计票效率？",
+      "reference_answer": "系统通过交互式零知识集合成员证明，在不泄露投票内容的情况下验证选票有效性，并用 SPESC 限定投票阶段的触发条件和自动执行。实验分别改变投票者与候选者数量，测量投票和计票耗时。",
+      "expected_chunk_ids": ["9353e36b7258856323dd", "feca8b5ef279a1f409f9"],
+      "expected_paper_ids": ["sha1:ce74dbe337385bd704660fcfbd3872a9bc0484e1"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "smart-contract", "global"]
+    },
+    {
+      "id": "hard-single-028",
+      "query": "区块链公链应用面临哪些层面的安全问题，综述如何组织攻击分类并提出防御策略？",
+      "reference_answer": "综述从区块链自身机制、钱包和交易所等周边设施以及用户安全三个层面分析威胁，以比特币和以太坊为例梳理攻击与应对方法，最终归纳 36 类安全问题并给出相应防范建议。",
+      "expected_chunk_ids": ["af99e6e32a3fa6fdb2b2", "c6f2861190be9ade6c52"],
+      "expected_paper_ids": ["sha1:f446bc12e77976cdf0e8fe05a4e8346ad65cf8a0"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "security", "global"]
+    },
+    {
+      "id": "hard-single-029",
+      "query": "多用户公钥可搜索加密方案如何一次授权多个用户检索密文，并保证文件解密和检索结果正确？",
+      "reference_answer": "数据拥有者一次加密即可指定多个可检索用户，通过关键词密文和用户公钥形成一对多授权，并用文件密钥保护信息让命中用户解密正文；智能合约执行检测算法以保证检索结果正确。",
+      "expected_chunk_ids": ["4c4689d7ca25a7f4f793", "ca3768a74a152fd6b747"],
+      "expected_paper_ids": ["sha1:f99c40ac02f47054aceb5820b0d7300f2ec85048"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "encrypted-search", "global"]
+    },
+    {
+      "id": "hard-single-030",
+      "query": "RPS 园区能源互联网为什么采用弱中心化联盟链，运营商与用户之间如何通过讨价还价形成电价？",
+      "reference_answer": "方案用联盟链分布式账本提升交易灵活性，同时保留弱中心化管理以约束去中心化带来的安全风险；园区运营商与用户围绕外部电网标杆电价进行多阶段讨价还价，在双方收益均衡下形成交易电价。",
+      "expected_chunk_ids": ["5c7cfa46e5286ba4576c", "6a4bd06da645cd9f4413"],
+      "expected_paper_ids": ["sha1:ada739ad0b6beec6609543bb7be0d562b6e2f5cd"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "energy-market", "global"]
+    },
+    {
+      "id": "hard-single-031",
+      "query": "医学大模型体系化人工智能框架如何通过知识分解降低算力依赖，公共知识网络和任务专用网络分别负责什么？",
+      "reference_answer": "框架将大模型分解为可弹性部署的原子网络，以降低参数量和算力依赖。每个原子网络包含提取任务共性的公共知识网络，以及提取特定任务信息的任务专用网络，两部分融合后完成具体医学任务。",
+      "expected_chunk_ids": ["494911e51541e324cb78", "4737c15cc8bcd4480221"],
+      "expected_paper_ids": ["sha1:a8a6c21ab84f481fe7802c28b5460858d71d6bf7"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "medical-ai", "global"]
+    },
+    {
+      "id": "hard-single-032",
+      "query": "配电系统 P2P 电力市场如何触发交易并完成分布式出清，怎样把配电网安全约束纳入计算？",
+      "reference_answer": "事件驱动器根据环境、参与者数量和交易功率启动市场，成员提交电量、电价和时段并与运营商交互直至出清收敛。模型用灵敏度刻画交易对电网的影响，以优化模型和拉格朗日乘子法分布式出清，在满足配电网安全约束时处理交易。",
+      "expected_chunk_ids": ["f7dae4804c85bfa29b89", "27de670d7bb310be304d"],
+      "expected_paper_ids": ["sha1:90e19f91f7ef85b889ba8ad653bcc60287ad7a98"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "power-market", "global"]
+    },
+    {
+      "id": "hard-single-033",
+      "query": "医疗临床数据跨机构共享为什么强调完整性和来源可追溯，区块链防篡改研究如何分析篡改攻击？",
+      "reference_answer": "跨机构临床研究必须证明数据来源可靠，保证从数据捕获到最终分析的完整性与可追溯性。研究构建区块链防篡改机制，设计两类篡改场景，并以马尔科夫链建模分析攻击过程。",
+      "expected_chunk_ids": ["4d634c129890a26ca8f1", "5756432f28db574e477a"],
+      "expected_paper_ids": ["sha1:839ac51b7c7d45f615a91cbced61ae7ec34ff8fa"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "healthcare", "global"]
+    },
+    {
+      "id": "hard-single-034",
+      "query": "Smart-Target 如何围绕目标语句缩小符号执行范围，实验从哪些指标评价漏洞检测与复现能力？",
+      "reference_answer": "Smart-Target 分析目标语句及其依赖关系生成制导信息，剪枝无关基本块和路径条件。实验评价漏洞检测与复现耗时、测试用例生成比例，以及目标依赖分析带来的额外漏洞覆盖。",
+      "expected_chunk_ids": ["62edea013f0eed2ff29f", "3584bb6bf0208b1933cc"],
+      "expected_paper_ids": ["sha1:dfebe8eb31cb9189fb7f6609c64ba022205342a4"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "smart-contract-security", "global"]
+    },
+    {
+      "id": "hard-single-035",
+      "query": "车联网路况共享方案如何利用链上信誉积分检测共谋节点发布的虚假消息？",
+      "reference_answer": "车辆向 RSU 提交实时路况信息，RSU 在聚合阶段从区块链读取车辆信誉积分并结合消息进行恶意检测，识别共谋节点协同发布的虚假路况；聚合结果经过共识节点验证后写入区块链供相关实体查询。",
+      "expected_chunk_ids": ["dad946e597add14a9c64", "57042db9fea2e5eb2ada"],
+      "expected_paper_ids": ["sha1:eab26f41d00cbecd778ee1e504171fb62a3094b7"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "vehicular-network", "global"]
+    },
+    {
+      "id": "hard-single-036",
+      "query": "数字虚拟资产保护的“1-3-1”研究方案如何组织科学问题、数学模型、关键技术和原型系统？",
+      "reference_answer": "研究围绕数字资产数学表征、应用安全可控和威胁管控三类科学问题，构建一个基础数学模型、三项关键技术和一套原型系统。数学模型进一步覆盖资产描述、安全表示、识别、完整性保护与防伪。",
+      "expected_chunk_ids": ["ae0bec232a922ef63d62", "a0cdc2a277da8912d16c"],
+      "expected_paper_ids": ["sha1:88cf677bf154f8ab21685bd76b8d2042f3672c37"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "digital-assets", "global"]
+    },
+    {
+      "id": "hard-single-037",
+      "query": "区块链数据管理与传统分布式数据库相比面临什么拜占庭环境挑战，UTXO 数据模型如何组织和验证交易？",
+      "reference_answer": "传统分布式数据库通常假定可信中心或只处理崩溃故障，而区块链数据管理必须考虑恶意节点与拜占庭容错，并重新处理存储、事务、查询和扩展性问题。UTXO 模型以未花费交易输出表示资产，通过消费旧 UTXO 并生成新 UTXO 完成交易，可快速检查双花。",
+      "expected_chunk_ids": ["cbd43f9982e40203405e", "6d1d2c7704ad59891620"],
+      "expected_paper_ids": ["sha1:961bbd19cf20fb946b9f5f6af866a323fb1fd570"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "data-management", "global"]
+    },
+    {
+      "id": "hard-single-038",
+      "query": "分布式密码技术综述如何支持移动设备跨子网认证，门限签名的密钥生成和签名时间分别受哪些参数影响？",
+      "reference_answer": "移动密钥管理把子网设备公钥打包上链，设备跨子网后可查询链上记录快速验证身份并建立群组通信。门限签名实验显示密钥生成时间主要受参与方数量 n 影响，多数方案的签名时间主要由阈值 t 决定。",
+      "expected_chunk_ids": ["8bed6fea82db015dfd0f", "2fdedd53313c87ae13b2"],
+      "expected_paper_ids": ["sha1:8c7c4eb60808de752b029275aa4b4495c28e877a"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "cryptography", "global"]
+    },
+    {
+      "id": "hard-single-039",
+      "query": "SM2 适配器签名如何实现分布式签名和一对多原子交换，其预签名生成与验证性能如何？",
+      "reference_answer": "方案结合 SM2 协同签名构造分布式适配器签名以避免单点故障，并基于适配器签名构造一对多批量原子交换协议。实验中预签名生成和验证耗时分别约为对比方案的四分之一和三分之一。",
+      "expected_chunk_ids": ["e2c933bdbdca414bb73c", "a8e1d9c486daef9ec3f7"],
+      "expected_paper_ids": ["sha1:d5d8bd18d847253a0f0f6a0a4d776e9cb5289a74"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "cryptography", "global"]
+    },
+    {
+      "id": "hard-single-040",
+      "query": "分布式 K 匿名方案如何惩罚位置泄露和虚假位置，隐私需求 K 增大时计算与通信开销怎样变化？",
+      "reference_answer": "区块链记录请求用户、协作用户及位置作为证据，发现泄露或虚假位置后，违规者后续 m 次查询都得不到协作帮助。随着 K 增大，请求用户验证和解密更多位置，计算时延与通信开销上升，而单个协作用户的开销基本不随 K 变化。",
+      "expected_chunk_ids": ["588e5c9e2d254f27c7f4", "408973d741a8f9ab4979"],
+      "expected_paper_ids": ["sha1:a2ef2816c50b8d0897bf028ccabaa8820b39e090"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "privacy", "global"]
+    },
+    {
+      "id": "hard-single-041",
+      "query": "格基群签名在区块链医疗数据共享中如何匿名治理重复贡献者，其安全强度和性能分析关注什么？",
+      "reference_answer": "系统用用户自主链接生成历史贡献证明，在同一患者重复提交病例时执行验证者条件撤销，同时不披露患者身份，区块链负责记录公开数据和证书。方案评估经典与量子安全强度，并比较时间开销、签名尺寸和链接证明尺寸。",
+      "expected_chunk_ids": ["600da95145c1c6e354ef", "c774f99a8a1da87c680a"],
+      "expected_paper_ids": ["sha1:d9e4034d87f6a139485b9aecd716bae809d76ce6"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "privacy", "global"]
+    },
+    {
+      "id": "hard-single-042",
+      "query": "区块链绿色电力交易系统提供哪些消纳凭证与交易能力，平台性能和可靠性测试结果如何？",
+      "reference_answer": "系统支持用户侧绿色电力消纳凭证的生成、交易和溯源，并提供高效共识、链上交易与身份认证。测试显示平均响应时间低于 0.06 秒、TPS 超过 10000，各项能力测试通过率为 100%。",
+      "expected_chunk_ids": ["1c2505dcf2779aaa4c5d", "a531cc570e396b1dc711"],
+      "expected_paper_ids": ["sha1:b268709d345e466820bae4c544860fe34595e1e1"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "green-power", "global"]
+    },
+    {
+      "id": "hard-single-043",
+      "query": "区块链如何支持绿色能源碳数据管理，绿电溯源结果怎样用于绿证核发和碳配额计算？",
+      "reference_answer": "研究分析区块链在绿电追溯、绿证交易、碳交易及绿证与碳资产联合市场中的适用性。溯源系统记录绿色能源种类、用量和各环节数据，结果用于核发绿证、计算碳配额并避免重复激励或惩罚。",
+      "expected_chunk_ids": ["de3dd6d966884afe2b15", "becf19cbb152717312a2"],
+      "expected_paper_ids": ["sha1:c97c0da1a762402375fb16057bb9577124eb1a32"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "carbon-data", "global"]
+    },
+    {
+      "id": "hard-single-044",
+      "query": "图区块链如何改造果蔬追溯数据结构并建立物理映射，从而改善数据关联和查询效率？",
+      "reference_answer": "方案把传统顺序表改造成由顶点、边、标签和属性组成的图结构，并建立物理区块与图区块顶点、边之间的映射，结合定制智能合约实现深度关联存储与查询，提升果蔬追溯深度和查询效率。",
+      "expected_chunk_ids": ["504e8552df7c2c167eb0", "2c4dbadb9986775a6ca5"],
+      "expected_paper_ids": ["sha1:b7af2a6f2c5bf626e1a333822dfaddfda4351b5b"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "traceability", "global"]
+    },
+    {
+      "id": "hard-single-045",
+      "query": "不同激励契约下，区块链应用成本如何影响低碳供应链的定价、碳减排量和企业利润？",
+      "reference_answer": "研究比较无激励、成本分担和收益共享契约。区块链会改变批发价与零售价，收益共享下单位减排量最高；只有应用成本低于相应阈值时，实施区块链才能提高碳减排量和制造商利润，其中收益共享契约的成本阈值最大。",
+      "expected_chunk_ids": ["54ca7ebce91639cb3b2f", "29f08df819d388cf2659"],
+      "expected_paper_ids": ["sha1:badd569a90ec4ea2b1eafaf7b32c73017ca4d98a"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "low-carbon-supply-chain", "global"]
+    },
+    {
+      "id": "hard-single-046",
+      "query": "未来电力现货市场需要哪些运营支撑技术，如何利用大数据和智能算法识别并预警市场风险？",
+      "reference_answer": "未来技术覆盖多元主体建模接入、市场出清、风险分析、可信交易环境和市场仿真。风险识别方案挖掘现货运营、电网安全和阻塞等历史数据，量化并分级风险，训练模式识别和神经网络模型实现自主识别与预警。",
+      "expected_chunk_ids": ["922fe5ecfc1554f5c0f1", "41db2a4b77ef8d690e38"],
+      "expected_paper_ids": ["sha1:c4dd5fa8957486691f86dc3a0b8bdfe992db1a11"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "power-market", "global"]
+    },
+    {
+      "id": "hard-single-047",
+      "query": "分布式随机数仿真系统由哪四层组成，性能测试如何比较不同节点规模下的计算耗时和带宽开销？",
+      "reference_answer": "Golang 仿真系统由核心组件层、网络传输层、通用处理层和对外服务层组成。性能测试改变节点数，比较各协议阶段的计算耗时、相同节点数下不同方案的算法耗时，以及每次生成随机数时各节点发送的字节数。",
+      "expected_chunk_ids": ["fadf30ede2ffc493aa26", "bbacb349af1e09486701"],
+      "expected_paper_ids": ["sha1:c08ad0f16768e61c5b93f6aff2515ef772900373"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "distributed-systems", "global"]
+    },
+    {
+      "id": "hard-single-048",
+      "query": "平行区块链如何从真实链数据生成软件定义的人工链，并用场景发生器、共识驱动引擎和算法分析工具评价协议？",
+      "reference_answer": "平台采集真实链的节点状态、交易和运行数据作为种子，通过改变共识、网络结构、算法和参数生成大量人工链，并在自博弈实验中形成平行数据。场景发生器实例化人工链，共识驱动引擎执行协议实验，算法分析工具利用实验数据评价和优化协议。",
+      "expected_chunk_ids": ["4023194a832321fb3be8", "9913f9e745e8a7f90f9c"],
+      "expected_paper_ids": ["sha1:eeb05c72ef78bc06efc9e37e26b74837d329fbfd"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "distributed-systems", "global"]
+    },
+    {
+      "id": "hard-single-049",
+      "query": "区块链辅助的紧急消息信任评估如何查询和使用车辆信任值，车辆反馈又怎样更新链上信誉？",
+      "reference_answer": "方案把车辆信任值分布式存储在区块链中，通过预缓存或查询后缓存结合智能合约低时延查询，并将车辆信任值、位置和消息新鲜度用于可信度评估。车辆经过事故区域后提交反馈，路侧单元据此增减广播车辆信任值并向区块链提交账本更新请求。",
+      "expected_chunk_ids": ["44f955dec3322a62b1b4", "aee9bced23a7dd310f5a"],
+      "expected_paper_ids": ["sha1:ffa17c2023000bcad1e9850a6363a5516f453b71"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "vehicular-network", "global"]
+    },
+    {
+      "id": "hard-single-050",
+      "query": "分布式 K 匿名方案的扩展性实验如何评估区块链长度和网络用户数对存储、计算时延及匿名区成功率的影响？",
+      "reference_answer": "随着区块链从 10 个区块增长到 100 个区块，协作用户需要下载和查询更多交易账单，存储开销增加，但计算时延增长很慢。网络用户越多，满足协作条件的用户越多，在不同 K 值下构造匿名区的成功率也随之提高。",
+      "expected_chunk_ids": ["df1a7046e41489e75103", "3e4efa9c813b8aa607f6"],
+      "expected_paper_ids": ["sha1:a2ef2816c50b8d0897bf028ccabaa8820b39e090"],
+      "search_scope": null,
+      "tags": ["zh", "single-paper", "privacy", "global"]
+    }
+  ]
+}

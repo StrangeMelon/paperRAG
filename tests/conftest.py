@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -43,3 +44,4 @@ def _load_dotenv_fallback(path: Path) -> None:
 
 
 _load_dotenv_once()
+os.environ.setdefault("PAPER_RAG_DISABLE_PIPELINE_MONITOR", "1")

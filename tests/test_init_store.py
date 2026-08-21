@@ -16,6 +16,7 @@ class _FakeQdrantClient:
     ) -> None:
         self.existing_collections = set(existing_collections or set())
         self.created_collections: list[dict] = []
+        self.payload_indexes: list[dict] = []
 
     def get_collections(self):
         return SimpleNamespace(
@@ -25,6 +26,9 @@ class _FakeQdrantClient:
     def create_collection(self, **kwargs) -> None:
         self.created_collections.append(kwargs)
         self.existing_collections.add(kwargs["collection_name"])
+
+    def create_payload_index(self, **kwargs) -> None:
+        self.payload_indexes.append(kwargs)
 
 
 def _init_store_module() -> ModuleType:
@@ -84,6 +88,10 @@ def test_init_qdrant_creates_missing_collections(
         assert str(call["vectors_config"].distance).lower().endswith("cosine")
 
     assert close_calls == ["closed"]
+    assert {
+        (item["collection_name"], item["field_name"])
+        for item in client.payload_indexes
+    } == {("test_paper_chunks", "paper_id")}
 
 
 def test_init_qdrant_keeps_existing_collections(
@@ -120,6 +128,10 @@ def test_init_qdrant_keeps_existing_collections(
     module.init_qdrant()
 
     assert client.created_collections == []
+    assert {
+        (item["collection_name"], item["field_name"])
+        for item in client.payload_indexes
+    } == {("test_paper_chunks", "paper_id")}
     assert close_calls == ["closed"]
 
 

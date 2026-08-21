@@ -172,3 +172,49 @@ def test_output_schema_and_chunks_passthrough(monkeypatch):
     assert set(out.keys()) == {"answer", "citations", "chunks", "suspicious_citations"}
     assert out["chunks"] == chunks
     assert set(out["suspicious_citations"].keys()) == {"numeric", "author_year", "count"}
+
+
+def test_regular_question_excludes_reference_chunks_from_simple_qa(monkeypatch):
+    reference = {
+        **_chunk(_ID_A),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    body = {**_chunk(_ID_B), "section": "Methods"}
+    fake = _stub(monkeypatch, chunks=[reference, body], reply=f"body [chunk:{_ID_B}]")
+
+    out = qs.answer("How does the method work?")
+
+    assert [chunk["chunk_id"] for chunk in out["chunks"]] == [_ID_B]
+    assert f"[chunk:{_ID_A}]" not in fake.user
+    assert out["citations"] == [_ID_B]
+
+
+def test_reference_only_regular_question_short_circuits_simple_qa(monkeypatch):
+    reference = {
+        **_chunk(_ID_A),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    fake = _stub(monkeypatch, chunks=[reference])
+
+    out = qs.answer("How does the method work?")
+
+    assert out["answer"] == "(no evidence found)"
+    assert out["chunks"] == []
+    assert fake.calls == []
+
+
+def test_explicit_reference_question_allows_reference_in_simple_qa(monkeypatch):
+    reference = {
+        **_chunk(_ID_A),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    fake = _stub(monkeypatch, chunks=[reference], reply=f"work [chunk:{_ID_A}]")
+
+    out = qs.answer("Show me the bibliography")
+
+    assert [chunk["chunk_id"] for chunk in out["chunks"]] == [_ID_A]
+    assert f"[chunk:{_ID_A}]" in fake.user
+    assert out["citations"] == [_ID_A]

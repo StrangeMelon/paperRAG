@@ -17,6 +17,7 @@ dict(基准的 setdefault 会把稀疏字段写进 dense_hits 的元素)。
 
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 
 from .. import config as cfg
@@ -73,35 +74,56 @@ def hybrid_search(
     top_k: int | None = None,
     paper_ids: list[str] | None = None,
     modality: str | None = None,
+    timings: dict[str, float] | None = None,
+    diagnostics: dict[str, list[dict]] | None = None,
+    sparse_query: str | None = None,
+    allow_concurrent: bool = False,
 ) -> list[dict]:
     """dense + 稀疏双腿检索后 RRF 融合, 返回 top_k*2(给 reranker 留余量)。"""
     c = cfg.load().retrieve
     top_k = top_k or c.rerank_top_k
     dense_error: Exception | None = None
     sparse_error: Exception | None = None
+    dense_started = time.perf_counter()
     try:
-        dense_hits = dense.retrieve(
-            query,
-            top_k=c.top_k_dense,
-            paper_ids=paper_ids,
-            modality=modality,
-        )
+        dense_kwargs = {
+            "top_k": c.top_k_dense,
+            "paper_ids": paper_ids,
+            "modality": modality,
+        }
+        if allow_concurrent:
+            dense_kwargs["allow_concurrent"] = True
+        dense_hits = dense.retrieve(query, **dense_kwargs)
     except Exception as exc:
         dense_error = exc
         dense_hits = []
         log.warning(f"dense retrieval failed, continuing with sparse: {exc}")
+    if timings is not None:
+        timings["dense_ms"] = round((time.perf_counter() - dense_started) * 1000, 1)
+    if diagnostics is not None:
+        diagnostics.setdefault("dense", []).extend(dict(item) for item in dense_hits)
+    sparse_started = time.perf_counter()
     try:
-        sparse_hits = _sparse_search(query, top_k=c.top_k_bm25, paper_ids=paper_ids)
+        sparse_hits = _sparse_search(sparse_query or query, top_k=c.top_k_bm25, paper_ids=paper_ids)
     except Exception as exc:
         sparse_error = exc
         sparse_hits = []
         log.warning(f"sparse retrieval failed, continuing with dense: {exc}")
+    if timings is not None:
+        timings["sparse_ms"] = round((time.perf_counter() - sparse_started) * 1000, 1)
+    if diagnostics is not None:
+        diagnostics.setdefault("sparse", []).extend(dict(item) for item in sparse_hits)
     if dense_error is not None and sparse_error is not None:
         raise RuntimeError("both dense and sparse retrieval are unavailable") from dense_error
     if modality:
         sparse_hits = [h for h in sparse_hits if h.get("modality") == modality]
 
+    rrf_started = time.perf_counter()
     fused = rrf_fuse([dense_hits, sparse_hits], k=c.rrf_k)
+    if timings is not None:
+        timings["rrf_ms"] = round((time.perf_counter() - rrf_started) * 1000, 1)
+    if diagnostics is not None:
+        diagnostics.setdefault("rrf", []).extend(dict(item) for item in fused)
     log.info(
         f"hybrid: backend={c.sparse_backend} dense={len(dense_hits)} "
         f"sparse={len(sparse_hits)} fused={len(fused)}"

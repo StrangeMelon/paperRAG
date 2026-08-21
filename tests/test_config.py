@@ -60,6 +60,10 @@ def test_loads_default_config_as_typed_object(monkeypatch) -> None:
     assert loaded.reranker.model_name == "BAAI/bge-reranker-v2-m3"
     assert loaded.qdrant.collection_chunks == "paper_chunks"
     assert loaded.qdrant.collection_wiki == "wiki_entries"
+    assert loaded.retrieve.references.enabled is True
+    assert loaded.retrieve.references.penalty == 0.15
+    assert loaded.retrieve.references.exclude_from_evidence is True
+    assert loaded.retrieve.references.legacy_section_fallback is True
     assert loaded.llm.temperatures.answer == 0.2
     assert loaded.vision.local_max_new_tokens == 256
     assert loaded.vision.max_concurrency == 4
@@ -146,3 +150,11 @@ def test_mcp_config_rejects_invalid_capacity() -> None:
 
     with pytest.raises(ValueError):
         config._Mcp(max_queued_retrievals=-1)
+
+
+@pytest.mark.parametrize("penalty", [-0.01, 1.01])
+def test_reference_policy_config_rejects_penalty_outside_unit_interval(penalty: float) -> None:
+    config = _config_module()
+
+    with pytest.raises(ValueError):
+        config._ReferencePolicy(penalty=penalty)

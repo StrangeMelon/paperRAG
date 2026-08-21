@@ -10,6 +10,7 @@ paths:
 embedding:
   provider: bge-m3
   model_name: BAAI/bge-m3
+  version: bge-m3:v1
   dim: 1024
   batch_size: 32
   max_length: 8192
@@ -53,6 +54,11 @@ retrieve:
   fts5_cjk_bigram: true         # 中文按相邻二字对(bigram)入索引; false 退回基准原文行为
   fts5_phrase_max_run: 6        # 中文查询串≤该字数按短语精确匹配, 超过按 bigram OR 词袋召回
   bm25_max_chunks: 200000       # rank_bm25 纯内存后备的规模护栏, 超限拒绝建索引并告警
+  references:
+    enabled: true
+    penalty: 0.15               # 普通查询中参考文献块的有效分乘数
+    exclude_from_evidence: true # 普通查询不允许参考文献块进入最终可信证据
+    legacy_section_fallback: true
 
 rag:
   max_inner_iters: 3
@@ -87,6 +93,31 @@ rag:
     no_evidence_message: "未在已索引文献中找到与该问题相关的内容。请确认问题与已入库的论文主题相符，或考虑通过 paper_ingest_tool 扩充语料库。"
     # 英文问题的拒答文案(qa_agentic 按问题语言路由)
     no_evidence_message_en: "No relevant content was found in the indexed papers. Please check that the question matches the indexed corpus, or ingest more papers via paper_ingest_tool."
+
+evaluation:
+  enabled: false
+  provider: custom
+  backends: [custom]
+  metrics: [hit_rate, mrr, recall, paper_hit_rate, citation_precision, citation_recall]
+  golden_set: tests/fixtures/evaluation/golden.json
+  top_k: 8
+  fail_on_error: false
+  retrieval_golden_set: tests/fixtures/evaluation/retrieval_golden.json
+  max_concurrency: 8           # Custom 纯检索评测同时执行的问题数
+  ragas:
+    golden_set: tests/fixtures/evaluation/ragas_golden.json
+    metrics: [faithfulness, answer_relevancy, context_precision, context_recall]
+    base_url: $RAGAS_BASE_URL
+    api_key: $RAGAS_API_KEY
+    judge_model: $RAGAS_MODEL
+    embedding_base_url: $RAGAS_EMBEDDING_BASE_URL
+    embedding_api_key: $RAGAS_EMBEDDING_API_KEY
+    embedding_model: $RAGAS_EMBEDDING_MODEL
+    max_concurrency: 4          # RAGAS QA 问题与指标评分的并发上限
+    timeout_sec: 120
+    max_retries: 3
+    cache_dir: data/evaluation/ragas_cache
+    judge_options: {}
 
 llm:
   provider: openai_compatible

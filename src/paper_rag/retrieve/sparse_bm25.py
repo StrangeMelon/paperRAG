@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from .. import config as cfg
 from ..utils.logger import get_logger
 from .fts5 import segment_cjk
+from .reference_policy import chunk_metadata
 
 log = get_logger("retrieve.bm25")
 
@@ -94,6 +95,7 @@ def build_index(force: bool = False) -> _Index:
                 "page": r.page,
                 "text": r.text,
                 "title": r.title,
+                "metadata": chunk_metadata({"metadata_json": r.metadata_json}),
             }
         )
 

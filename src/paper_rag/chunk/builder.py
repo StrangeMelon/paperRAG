@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from pathlib import Path
 
 from ..utils.logger import get_logger
@@ -122,7 +123,13 @@ def _load_layout_assets(parsed_dir: Path) -> dict[str, dict]:
     return assets
 
 
-def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[dict], list[dict]]:
+def build_chunks(
+    paper_id: str,
+    parsed_dir: Path,
+    *,
+    title: str,
+    timings: dict[str, float] | None = None,
+) -> tuple[list[dict], list[dict]]:
     md_path = parsed_dir / "paper.md"
     md = md_path.read_text(encoding="utf-8")
     source_path = str(md_path.resolve())
@@ -243,12 +250,16 @@ def build_chunks(paper_id: str, parsed_dir: Path, *, title: str) -> tuple[list[d
                     }
                 )
 
+    vision_started = time.perf_counter()
     try:
         from paper_rag.vision.enrich import enrich_chunks
 
         chunks = enrich_chunks(paper_id, chunks, language=language)
     except Exception as exc:
         log.warning(f"visual enrichment skipped for {paper_id}: {exc}")
+    finally:
+        if timings is not None:
+            timings["vision_seconds"] = time.perf_counter() - vision_started
 
     log.info(f"built {len(sections)} sections, {len(chunks)} chunks for {paper_id}")
     return sections, chunks

@@ -4,7 +4,7 @@
 切片 1: retrieve_round_with_rewrite(多查询池化去重取高分、模态追加轮、
         top_k*3 精排窗口、rewrite_fn 注入优先、无 wiki_context 参数的
         TypeError 兼容、rag.query_rewrite 缺席时恒等回退 + warning)。
-切片 2: _diversify_by_paper(单篇限额 2、溢出补位、top_k 截断)。
+切片 2: _diversify_by_paper(单篇限额 50、溢出补位、top_k 截断)。
 
 接口约定(与基准一致):
 
@@ -69,6 +69,69 @@ def test_pooling_dedups_and_keeps_higher_rrf(monkeypatch):
     by_id = {c["chunk_id"]: c for c in chunks}
     assert by_id["a"]["score_rrf"] == 0.9  # 同块保留高分版本
     assert chunks[0]["chunk_id"] == "a"  # 池化后按 score_rrf 降序
+
+
+def test_retrieve_round_reports_module_timings(monkeypatch):
+    _stub(monkeypatch, hybrid_results=lambda q, m: [{"chunk_id": "a", "score_rrf": 0.5}])
+    timings: dict[str, float] = {}
+
+    chunks, _rw, reported = pl.retrieve_round_with_rewrite(
+        "q",
+        None,
+        4,
+        rewrite_fn=lambda q, wiki_context=None: {"dense_queries": [q]},
+        timings=timings,
+    )
+
+    assert chunks
+    assert reported is timings
+    assert {"query_rewrite_ms", "hybrid_ms", "rerank_ms", "diversify_ms"} <= set(timings)
+    assert all(value >= 0 for value in timings.values())
+
+
+def test_diagnostic_fallback_keeps_timings_and_stage_results(monkeypatch):
+    calls: list[dict] = []
+
+    def legacy_hybrid(query, *, top_k, paper_ids, modality, timings=None, diagnostics=None):
+        calls.append({"timings": timings, "diagnostics": diagnostics})
+        assert timings is not None
+        assert diagnostics is not None
+        timings.update({"dense_ms": 2.0, "sparse_ms": 3.0, "rrf_ms": 1.0})
+        diagnostics.update(
+            {
+                "dense": [{"chunk_id": "dense-1", "score": 0.9}],
+                "sparse": [{"chunk_id": "sparse-1", "score_bm25": 4.0}],
+                "rrf": [{"chunk_id": "dense-1", "score_rrf": 0.1}],
+            }
+        )
+        return diagnostics["rrf"]
+
+    monkeypatch.setattr(pl, "hybrid_search", legacy_hybrid)
+    monkeypatch.setattr(pl, "_rerank", lambda query, candidates, top_k: candidates)
+    timings: dict[str, float] = {}
+    diagnostics: dict[str, object] = {}
+
+    chunks, _rewrite, _reported = pl.retrieve_round_with_rewrite(
+        "q",
+        None,
+        4,
+        rewrite_fn=lambda query, wiki_context=None: {
+            "dense_queries": [query],
+            "bm25_query": "keywords",
+        },
+        timings=timings,
+        diagnostics=diagnostics,
+    )
+
+    assert chunks[0]["chunk_id"] == "dense-1"
+    assert chunks[0]["score_rrf"] == 0.1
+    assert chunks[0]["score_effective"] == 0.1
+    assert chunks[0]["reference_penalized"] is False
+    assert calls and calls[0]["timings"] is not None
+    assert {"dense_ms", "sparse_ms", "rrf_ms"} <= timings.keys()
+    assert diagnostics["dense"] == [{"chunk_id": "dense-1", "score": 0.9}]
+    assert diagnostics["sparse"] == [{"chunk_id": "sparse-1", "score_bm25": 4.0}]
+    assert diagnostics["rrf"] == [{"chunk_id": "dense-1", "score_rrf": 0.1}]
 
 
 def test_modality_hint_adds_targeted_rounds(monkeypatch):
@@ -156,6 +219,130 @@ def test_retrieve_round_drops_payload(monkeypatch):
     assert isinstance(out, list) and out[0]["chunk_id"] == "a"
 
 
+def test_evaluation_parallel_reaches_hybrid_and_rerank(monkeypatch):
+    calls: dict[str, list[bool]] = {"hybrid": [], "rerank": []}
+
+    def hybrid(query, *, top_k, paper_ids, modality, allow_concurrent):
+        calls["hybrid"].append(allow_concurrent)
+        return [{"chunk_id": "a", "score_rrf": 0.5}]
+
+    def rerank(query, candidates, *, top_k, allow_concurrent):
+        calls["rerank"].append(allow_concurrent)
+        return candidates
+
+    monkeypatch.setattr(pl, "hybrid_search", hybrid)
+    monkeypatch.setattr(pl, "_rerank", rerank)
+
+    chunks, _rewrite = pl.retrieve_round_with_rewrite(
+        "q",
+        None,
+        4,
+        rewrite_fn=lambda q, wiki_context=None: {"dense_queries": [q]},
+        evaluation_parallel=True,
+    )
+
+    assert chunks
+    assert calls == {"hybrid": [True], "rerank": [True]}
+
+
+def test_regular_query_demotes_reference_chunk_after_rerank(monkeypatch):
+    hits = [
+        {
+            "chunk_id": "ref",
+            "score_rrf": 0.09,
+            "metadata": {"is_references": True},
+        },
+        {"chunk_id": "body", "score_rrf": 0.08, "section": "Methods"},
+    ]
+    _stub(monkeypatch, hybrid_results=lambda q, m: hits)
+
+    chunks, _rewrite = pl.retrieve_round_with_rewrite(
+        "How does the method work?",
+        None,
+        2,
+        rewrite_fn=lambda q, wiki_context=None: {"dense_queries": [q]},
+    )
+
+    assert [chunk["chunk_id"] for chunk in chunks] == ["body", "ref"]
+    assert chunks[1]["reference_penalized"] is True
+    assert chunks[1]["score_effective"] < chunks[0]["score_effective"]
+
+
+def test_reference_query_bypasses_reference_penalty(monkeypatch):
+    hits = [
+        {
+            "chunk_id": "ref",
+            "score_rrf": 0.09,
+            "metadata": {"is_references": True},
+        },
+        {"chunk_id": "body", "score_rrf": 0.08},
+    ]
+    _stub(monkeypatch, hybrid_results=lambda q, m: hits)
+
+    chunks, _rewrite = pl.retrieve_round_with_rewrite(
+        "Show me the bibliography",
+        None,
+        2,
+        rewrite_fn=lambda q, wiki_context=None: {"dense_queries": [q]},
+    )
+
+    assert [chunk["chunk_id"] for chunk in chunks] == ["ref", "body"]
+    assert chunks[0]["reference_penalized"] is False
+
+
+def test_reference_intent_override_survives_followup_query(monkeypatch):
+    hits = [
+        {
+            "chunk_id": "ref",
+            "score_rrf": 0.09,
+            "metadata": {"is_references": True},
+        },
+        {"chunk_id": "body", "score_rrf": 0.08},
+    ]
+    _stub(monkeypatch, hybrid_results=lambda q, m: hits)
+
+    chunks, _rewrite = pl.retrieve_round_with_rewrite(
+        "Which specific works?",
+        None,
+        2,
+        reference_intent=True,
+        rewrite_fn=lambda q, wiki_context=None: {"dense_queries": [q]},
+    )
+
+    assert chunks[0]["chunk_id"] == "ref"
+    assert chunks[0]["reference_penalized"] is False
+
+
+def test_reference_policy_is_exposed_in_diagnostics(monkeypatch):
+    hits = [
+        {
+            "chunk_id": "ref",
+            "score_rrf": 0.09,
+            "metadata": {"is_references": True},
+        }
+    ]
+    _stub(monkeypatch, hybrid_results=lambda q, m: hits)
+    timings: dict[str, float] = {}
+    diagnostics: dict[str, object] = {}
+
+    chunks, _rewrite, _reported = pl.retrieve_round_with_rewrite(
+        "How does the method work?",
+        None,
+        1,
+        rewrite_fn=lambda q, wiki_context=None: {"dense_queries": [q]},
+        timings=timings,
+        diagnostics=diagnostics,
+    )
+
+    assert diagnostics["reference_policy"] == {
+        "enabled": True,
+        "intent": False,
+        "penalty": 0.15,
+        "penalized_chunks": 1,
+    }
+    assert diagnostics["rerank"] == chunks
+
+
 # ---------- 切片 2: _diversify_by_paper ----------
 
 
@@ -163,17 +350,20 @@ def _mk(paper: str, i: int) -> dict:
     return {"chunk_id": f"{paper}-{i}", "paper_id": paper}
 
 
-def test_diversify_caps_two_per_paper():
-    chunks = [_mk("p1", 0), _mk("p1", 1), _mk("p1", 2), _mk("p2", 0), _mk("p2", 1)]
-    out = pl._diversify_by_paper(chunks, top_k=4)
-    assert [c["chunk_id"] for c in out] == ["p1-0", "p1-1", "p2-0", "p2-1"]
+def test_diversify_caps_fifty_per_paper():
+    chunks = [_mk("p1", i) for i in range(51)] + [_mk("p2", 0)]
+    out = pl._diversify_by_paper(chunks, top_k=51)
+    assert [c["chunk_id"] for c in out] == [
+        *[f"p1-{i}" for i in range(50)],
+        "p2-0",
+    ]
 
 
 def test_diversify_overflow_backfills_when_quota_short():
-    chunks = [_mk("p1", i) for i in range(5)]
-    out = pl._diversify_by_paper(chunks, top_k=4)
-    # 单篇限额 2, 但只有一篇论文时溢出块补位到 top_k
-    assert [c["chunk_id"] for c in out] == ["p1-0", "p1-1", "p1-2", "p1-3"]
+    chunks = [_mk("p1", i) for i in range(55)]
+    out = pl._diversify_by_paper(chunks, top_k=52)
+    # 单篇限额 50, 但只有一篇论文时溢出块补位到 top_k
+    assert [c["chunk_id"] for c in out] == [f"p1-{i}" for i in range(52)]
 
 
 def test_diversify_truncates_at_top_k():

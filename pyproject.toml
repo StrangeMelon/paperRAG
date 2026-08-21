@@ -72,6 +72,15 @@ deliver-pdf = [
 proactive = [
     "apscheduler>=3.10",
 ]
+evaluation = [
+    "ragas==0.4.3",
+    "datasets>=4,<5",
+    "langchain-community>=0.3.31,<0.4",
+    "instructor>=1.7,<2",
+]
+dashboard = [
+    "streamlit>=1.40,<2",
+]
 # Optional local vision fallback for figure/table summaries.
 vision-local = [
     "accelerate>=0.30",
@@ -141,6 +150,8 @@ ignore = [
 # 全角引用形态(【1】/（张三等，2020）)是引用校验的处理对象, 全角字符即业务数据
 "src/paper_rag/rag/citation_check.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/test_citation_check.py" = ["RUF001", "RUF002", "RUF003"]
+# Dashboard 页面中的全角标点属于用户可见中文 UI 文案。
+"src/paper_rag/dashboard/pages/**" = ["RUF001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["paper_rag"]

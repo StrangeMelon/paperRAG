@@ -213,6 +213,33 @@ def test_retrieve_evidence_iterates_on_reflection_and_deduplicates_candidates(
         {"dense_queries": ["question"]},
         {"dense_queries": ["follow"]},
     ]
+    for iteration in execution.trace["iters"]:
+        assert iteration["retrieval_latency_ms"] >= 0
+        assert iteration["iteration_latency_ms"] >= iteration["retrieval_latency_ms"]
+    assert execution.trace["iters"][0]["reflect_latency_ms"] >= 0
+
+
+def test_retrieve_evidence_records_zero_result_retrieval_latency(monkeypatch) -> None:
+    monkeypatch.setattr(
+        retrieval.cfg,
+        "load",
+        lambda: SimpleNamespace(rag=SimpleNamespace(max_inner_iters=1, enable_reflect=True)),
+    )
+
+    execution = retrieve_evidence(
+        "question",
+        paper_ids=None,
+        max_evidence=4,
+        include_wiki=False,
+        wiki_max_entries=0,
+        principal=Principal(tenant_id="tenant-a", user_id="user-a"),
+        dependencies=_dependencies(),
+    )
+
+    iteration = execution.trace["iters"][0]
+    assert iteration["n_retrieved"] == 0
+    assert iteration["retrieval_latency_ms"] >= 0
+    assert iteration["iteration_latency_ms"] >= iteration["retrieval_latency_ms"]
 
 
 def test_retrieve_evidence_no_chunks_returns_empty_public_evidence(monkeypatch) -> None:
@@ -263,6 +290,148 @@ def test_retrieve_evidence_abstention_does_not_leak_low_relevance_chunks(monkeyp
     assert execution.candidate_chunks == low_chunks
     assert execution.evidence_chunks == []
     assert execution.allowed_chunk_ids == []
+
+
+def test_regular_query_filters_references_before_abstain_and_selection(monkeypatch) -> None:
+    monkeypatch.setattr(
+        retrieval.cfg,
+        "load",
+        lambda: SimpleNamespace(rag=SimpleNamespace(max_inner_iters=1, enable_reflect=False)),
+    )
+    reference = {
+        **_chunk("ref", score=0.99),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    body = _chunk("body", score=0.4)
+    abstain_inputs: list[list[str]] = []
+
+    def decide_abstain(chunks):
+        abstain_inputs.append([chunk["chunk_id"] for chunk in chunks])
+        return {"decision": "confident", "evidence_score": 0.4}
+
+    execution = retrieve_evidence(
+        "How does the method work?",
+        paper_ids=None,
+        max_evidence=4,
+        include_wiki=False,
+        wiki_max_entries=0,
+        principal=Principal(tenant_id="tenant-a", user_id="user-a"),
+        dependencies=_dependencies(
+            retrieve_round=lambda *args: [reference, body],
+            decide_abstain=decide_abstain,
+        ),
+    )
+
+    assert [chunk["chunk_id"] for chunk in execution.candidate_chunks] == ["ref", "body"]
+    assert abstain_inputs == [["body"]]
+    assert [chunk["chunk_id"] for chunk in execution.evidence_chunks] == ["body"]
+    assert execution.trace["reference_policy"]["excluded_chunk_ids"] == ["ref"]
+
+
+def test_regular_query_with_reference_only_candidates_returns_no_evidence(monkeypatch) -> None:
+    monkeypatch.setattr(
+        retrieval.cfg,
+        "load",
+        lambda: SimpleNamespace(rag=SimpleNamespace(max_inner_iters=1, enable_reflect=False)),
+    )
+    reference = {
+        **_chunk("ref", score=0.99),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+
+    execution = retrieve_evidence(
+        "How does the method work?",
+        paper_ids=None,
+        max_evidence=4,
+        include_wiki=False,
+        wiki_max_entries=0,
+        principal=Principal(tenant_id="tenant-a", user_id="user-a"),
+        dependencies=_dependencies(retrieve_round=lambda *args: [reference]),
+    )
+
+    assert execution.internal_decision == "no_evidence"
+    assert execution.public_decision == "no_evidence"
+    assert execution.candidate_chunks == [reference]
+    assert execution.evidence_chunks == []
+    assert execution.trace["abstain"]["reason"] == "reference_only"
+
+
+def test_regular_reference_only_round_does_not_call_reflect(monkeypatch) -> None:
+    monkeypatch.setattr(
+        retrieval.cfg,
+        "load",
+        lambda: SimpleNamespace(rag=SimpleNamespace(max_inner_iters=2, enable_reflect=True)),
+    )
+    reference = {
+        **_chunk("ref", score=0.99),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+
+    execution = retrieve_evidence(
+        "How does the method work?",
+        paper_ids=None,
+        max_evidence=4,
+        include_wiki=False,
+        wiki_max_entries=0,
+        principal=Principal(tenant_id="tenant-a", user_id="user-a"),
+        dependencies=_dependencies(
+            retrieve_round=lambda *args: [reference],
+            reflect=lambda *args: pytest.fail("reference-only evidence must not reach reflect"),
+        ),
+    )
+
+    assert execution.public_decision == "no_evidence"
+    assert execution.trace["stopped_by"] == "reference_only"
+
+
+def test_reference_intent_is_forwarded_across_reflection_rounds(monkeypatch) -> None:
+    monkeypatch.setattr(
+        retrieval.cfg,
+        "load",
+        lambda: SimpleNamespace(rag=SimpleNamespace(max_inner_iters=2, enable_reflect=True)),
+    )
+    calls: list[tuple[str, bool | None]] = []
+
+    def retrieve_round(
+        query,
+        paper_ids,
+        top_k,
+        wiki_context,
+        timings=None,
+        *,
+        reference_intent=None,
+    ):
+        calls.append((query, reference_intent))
+        return [
+            {
+                **_chunk(f"ref-{len(calls)}"),
+                "section": "References",
+                "metadata": {"is_references": True},
+            }
+        ]
+
+    reflections = [{"sufficiency": "insufficient", "follow_up": "Which specific works?"}]
+    execution = retrieve_evidence(
+        "Which papers are cited by this article?",
+        paper_ids=None,
+        max_evidence=2,
+        include_wiki=False,
+        wiki_max_entries=0,
+        principal=Principal(tenant_id="tenant-a", user_id="user-a"),
+        dependencies=_dependencies(
+            retrieve_round=retrieve_round,
+            reflect=lambda question, evidence: reflections.pop(0),
+        ),
+    )
+
+    assert calls == [
+        ("Which papers are cited by this article?", True),
+        ("Which specific works?", True),
+    ]
+    assert [chunk["chunk_id"] for chunk in execution.evidence_chunks] == ["ref-1", "ref-2"]
 
 
 def test_retrieve_evidence_attaches_post_wiki_only_to_selected_evidence(monkeypatch) -> None:

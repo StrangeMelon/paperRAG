@@ -26,6 +26,7 @@ import re
 
 from .. import config as cfg
 from ..utils.logger import get_logger
+from .reference_policy import chunk_metadata
 
 log = get_logger("retrieve.fts5")
 
@@ -185,7 +186,8 @@ def search(query: str, top_k: int = 20, paper_ids: list[str] | None = None) -> l
 
     sql = (
         "SELECT chunks_fts.chunk_id, chunks_fts.paper_id, chunks_fts.modality, "
-        "  chunk.text, -bm25(chunks_fts) AS score "
+        "  chunk.section, chunk.text, chunk.title, chunk.metadata_json, "
+        "  -bm25(chunks_fts) AS score "
         "FROM chunks_fts JOIN chunk ON chunk.chunk_id = chunks_fts.chunk_id "
         "WHERE chunks_fts MATCH :q "
     )
@@ -207,8 +209,11 @@ def search(query: str, top_k: int = 20, paper_ids: list[str] | None = None) -> l
             "chunk_id": row[0],
             "paper_id": row[1],
             "modality": row[2],
-            "text": row[3],
-            "score_bm25": float(row[4]),
+            "section": row[3],
+            "text": row[4],
+            "title": row[5],
+            "metadata": chunk_metadata({"metadata_json": row[6]}),
+            "score_bm25": float(row[7]),
             "rank_bm25": rank,
         }
         for rank, row in enumerate(rows)

@@ -78,6 +78,10 @@ class Chunk(SQLModel, table=True):
     metadata_json: str = "{}"   # JSON 字符串, 保存 section_level、chunk_ordinal、element_type、视觉摘要等扩展信息。
     neighbors_json: str = "[]"  # 相邻 Chunk ID 的 JSON 数组; 当前构建流程默认写入空数组 []。
 
+    content_id: str | None = Field(default=None, index=True)
+    embedding_version: str | None = None
+    payload_fingerprint: str | None = None
+
 
 class IngestRun(SQLModel, table=True):
     """一次 ingest pipeline 的执行记录, 用于追踪每个论文的处理步骤。"""
@@ -106,6 +110,9 @@ _CHUNK_COLUMN_MIGRATIONS: dict[str, str] = {
     "char_end": "INTEGER",
     "raw_snippet": "TEXT",
     "metadata_json": "TEXT DEFAULT '{}'",
+    "content_id": "TEXT",
+    "embedding_version": "TEXT",
+    "payload_fingerprint": "TEXT",
 }
 
 def _apply_pragmas(
@@ -284,6 +291,14 @@ def get_papers_by_ids(paper_ids: list[str]) -> list[Paper]:
     engine = get_engine()
     with Session(engine) as session:
         statement = select(Paper).where(Paper.paper_id.in_(paper_ids))
+        return list(session.exec(statement))
+
+
+def list_papers_by_status(status: str = "done") -> list[Paper]:
+    """Return papers in deterministic ID order for evaluation snapshots."""
+    engine = get_engine()
+    with Session(engine) as session:
+        statement = select(Paper).where(Paper.status == status).order_by(Paper.paper_id)
         return list(session.exec(statement))
 
 def record_ingest_step(

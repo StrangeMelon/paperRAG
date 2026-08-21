@@ -1,0 +1,962 @@
+{
+  "schema_version": "ragas-eval.v1",
+  "name": "paper-rag-ragas-golden-v1-40",
+  "description": "RAGAS 端到端评测集：14 条单篇直接问答、8 条跨段推理、8 条多论文比较、4 条术语解释、4 条拒答和 2 条跨语言问答。",
+  "corpus": {
+    "selection": "all_indexed"
+  },
+  "test_cases": [
+    {
+      "id": "ragas-zh-direct-001",
+      "query": "中国农产品质量安全可追溯体系经历了哪些发展阶段，未来将怎样利用多模态数据、人工智能和新型区块链实现智能化？",
+      "paper_ids": [
+        "sha1:9cfc027bb5676353a85a516ad6135c31acb4ae95"
+      ],
+      "reference_answer": "体系经历制度框架初建、平台全面推广和数字智能化转型三个阶段。未来将融合多源异构数据和多模态风险预警，利用大模型、时空图网络、数字孪生、量子区块链及跨链协同建设智能化追溯体系。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "ac30a92943ebc907503a",
+        "c811d79116a9f37db880"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "factual",
+        "medium",
+        "traceability"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-026；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-002",
+      "query": "零知识智能合约投票系统如何验证选票有效性并保护投票内容，性能实验如何评价投票和计票效率？",
+      "paper_ids": [
+        "sha1:ce74dbe337385bd704660fcfbd3872a9bc0484e1"
+      ],
+      "reference_answer": "系统通过交互式零知识集合成员证明，在不泄露投票内容的情况下验证选票有效性，并用 SPESC 限定投票阶段的触发条件和自动执行。实验分别改变投票者与候选者数量，测量投票和计票耗时。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "9353e36b7258856323dd",
+        "feca8b5ef279a1f409f9"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method-and-experiment",
+        "medium",
+        "smart-contract"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-027；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-003",
+      "query": "区块链公链应用面临哪些层面的安全问题，综述如何组织攻击分类并提出防御策略？",
+      "paper_ids": [
+        "sha1:f446bc12e77976cdf0e8fe05a4e8346ad65cf8a0"
+      ],
+      "reference_answer": "综述从区块链自身机制、钱包和交易所等周边设施以及用户安全三个层面分析威胁，以比特币和以太坊为例梳理攻击与应对方法，最终归纳 36 类安全问题并给出相应防范建议。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "af99e6e32a3fa6fdb2b2",
+        "c6f2861190be9ade6c52"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "factual",
+        "easy",
+        "security"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-028；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-004",
+      "query": "多用户公钥可搜索加密方案如何一次授权多个用户检索密文，并保证文件解密和检索结果正确？",
+      "paper_ids": [
+        "sha1:f99c40ac02f47054aceb5820b0d7300f2ec85048"
+      ],
+      "reference_answer": "数据拥有者一次加密即可指定多个可检索用户，通过关键词密文和用户公钥形成一对多授权，并用文件密钥保护信息让命中用户解密正文；智能合约执行检测算法以保证检索结果正确。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "4c4689d7ca25a7f4f793",
+        "ca3768a74a152fd6b747"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method",
+        "medium",
+        "encrypted-search"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-029；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-005",
+      "query": "医学大模型体系化人工智能框架如何通过知识分解降低算力依赖，公共知识网络和任务专用网络分别负责什么？",
+      "paper_ids": [
+        "sha1:a8a6c21ab84f481fe7802c28b5460858d71d6bf7"
+      ],
+      "reference_answer": "框架将大模型分解为可弹性部署的原子网络，以降低参数量和算力依赖。每个原子网络包含提取任务共性的公共知识网络，以及提取特定任务信息的任务专用网络，两部分融合后完成具体医学任务。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "494911e51541e324cb78",
+        "4737c15cc8bcd4480221"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method",
+        "medium",
+        "medical-ai"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-031；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-006",
+      "query": "Smart-Target 如何围绕目标语句缩小符号执行范围，实验从哪些指标评价漏洞检测与复现能力？",
+      "paper_ids": [
+        "sha1:dfebe8eb31cb9189fb7f6609c64ba022205342a4"
+      ],
+      "reference_answer": "Smart-Target 分析目标语句及其依赖关系生成制导信息，剪枝无关基本块和路径条件。实验评价漏洞检测与复现耗时、测试用例生成比例，以及目标依赖分析带来的额外漏洞覆盖。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "62edea013f0eed2ff29f",
+        "3584bb6bf0208b1933cc"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method-and-experiment",
+        "medium",
+        "smart-contract-security"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-034；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-007",
+      "query": "车联网路况共享方案如何利用链上信誉积分检测共谋节点发布的虚假消息？",
+      "paper_ids": [
+        "sha1:eab26f41d00cbecd778ee1e504171fb62a3094b7"
+      ],
+      "reference_answer": "车辆向 RSU 提交实时路况信息，RSU 在聚合阶段从区块链读取车辆信誉积分并结合消息进行恶意检测，识别共谋节点协同发布的虚假路况；聚合结果经过共识节点验证后写入区块链供相关实体查询。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "dad946e597add14a9c64",
+        "57042db9fea2e5eb2ada"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method",
+        "easy",
+        "vehicular-network"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-035；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-008",
+      "query": "数字虚拟资产保护的“1-3-1”研究方案如何组织科学问题、数学模型、关键技术和原型系统？",
+      "paper_ids": [
+        "sha1:88cf677bf154f8ab21685bd76b8d2042f3672c37"
+      ],
+      "reference_answer": "研究围绕数字资产数学表征、应用安全可控和威胁管控三类科学问题，构建一个基础数学模型、三项关键技术和一套原型系统。数学模型进一步覆盖资产描述、安全表示、识别、完整性保护与防伪。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "ae0bec232a922ef63d62",
+        "a0cdc2a277da8912d16c"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "factual",
+        "easy",
+        "digital-assets"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-036；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-009",
+      "query": "区块链数据管理与传统分布式数据库相比面临什么拜占庭环境挑战，UTXO 数据模型如何组织和验证交易？",
+      "paper_ids": [
+        "sha1:961bbd19cf20fb946b9f5f6af866a323fb1fd570"
+      ],
+      "reference_answer": "传统分布式数据库通常假定可信中心或只处理崩溃故障，而区块链数据管理必须考虑恶意节点与拜占庭容错，并重新处理存储、事务、查询和扩展性问题。UTXO 模型以未花费交易输出表示资产，通过消费旧 UTXO 并生成新 UTXO 完成交易，可快速检查双花。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "cbd43f9982e40203405e",
+        "6d1d2c7704ad59891620"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "factual",
+        "medium",
+        "data-management"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-037；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-010",
+      "query": "区块链绿色电力交易系统提供哪些消纳凭证与交易能力，平台性能和可靠性测试结果如何？",
+      "paper_ids": [
+        "sha1:b268709d345e466820bae4c544860fe34595e1e1"
+      ],
+      "reference_answer": "系统支持用户侧绿色电力消纳凭证的生成、交易和溯源，并提供高效共识、链上交易与身份认证。测试显示平均响应时间低于 0.06 秒、TPS 超过 10000，各项能力测试通过率为 100%。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "1c2505dcf2779aaa4c5d",
+        "a531cc570e396b1dc711"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "experiment",
+        "medium",
+        "green-power"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-042；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-011",
+      "query": "图区块链如何改造果蔬追溯数据结构并建立物理映射，从而改善数据关联和查询效率？",
+      "paper_ids": [
+        "sha1:b7af2a6f2c5bf626e1a333822dfaddfda4351b5b"
+      ],
+      "reference_answer": "方案把传统顺序表改造成由顶点、边、标签和属性组成的图结构，并建立物理区块与图区块顶点、边之间的映射，结合定制智能合约实现深度关联存储与查询，提升果蔬追溯深度和查询效率。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "504e8552df7c2c167eb0",
+        "2c4dbadb9986775a6ca5"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method",
+        "medium",
+        "traceability"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-044；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-012",
+      "query": "分布式随机数仿真系统由哪四层组成，性能测试如何比较不同节点规模下的计算耗时和带宽开销？",
+      "paper_ids": [
+        "sha1:c08ad0f16768e61c5b93f6aff2515ef772900373"
+      ],
+      "reference_answer": "Golang 仿真系统由核心组件层、网络传输层、通用处理层和对外服务层组成。性能测试改变节点数，比较各协议阶段的计算耗时、相同节点数下不同方案的算法耗时，以及每次生成随机数时各节点发送的字节数。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "fadf30ede2ffc493aa26",
+        "bbacb349af1e09486701"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "architecture-and-experiment",
+        "medium",
+        "distributed-systems"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-047；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-013",
+      "query": "平行区块链如何从真实链数据生成软件定义的人工链，并用场景发生器、共识驱动引擎和算法分析工具评价协议？",
+      "paper_ids": [
+        "sha1:eeb05c72ef78bc06efc9e37e26b74837d329fbfd"
+      ],
+      "reference_answer": "平台采集真实链的节点状态、交易和运行数据作为种子，通过改变共识、网络结构、算法和参数生成大量人工链，并在自博弈实验中形成平行数据。场景发生器实例化人工链，共识驱动引擎执行协议实验，算法分析工具利用实验数据评价和优化协议。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "4023194a832321fb3be8",
+        "9913f9e745e8a7f90f9c"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method",
+        "hard",
+        "distributed-systems"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-048；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-direct-014",
+      "query": "区块链辅助的紧急消息信任评估如何查询和使用车辆信任值，车辆反馈又怎样更新链上信誉？",
+      "paper_ids": [
+        "sha1:ffa17c2023000bcad1e9850a6363a5516f453b71"
+      ],
+      "reference_answer": "方案把车辆信任值分布式存储在区块链中，通过预缓存或查询后缓存结合智能合约低时延查询，并将车辆信任值、位置和消息新鲜度用于可信度评估。车辆经过事故区域后提交反馈，路侧单元据此增减广播车辆信任值并向区块链提交账本更新请求。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "44f955dec3322a62b1b4",
+        "aee9bced23a7dd310f5a"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "direct",
+        "method-and-experiment",
+        "medium",
+        "vehicular-network"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-049；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-001",
+      "query": "在去中心化电力调频设计中，调频积分如何产生、兑换和流通，算例验证了哪些系统效果？",
+      "paper_ids": [
+        "sha1:006f2ca77aea21a555fc1223850a3208d29fd59a"
+      ],
+      "reference_answer": "调频积分按机组调频表现生成，可向调度中心转账兑换现值，也可依据智能合约在机组间交易。算例显示分布式调频系统能够完成调频任务和积分结算，并提升机组参与积极性及资源利用效率。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "5115dfd6ffa41c1cfe63",
+        "47a73f1cf2cd878a3f71"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "method-and-result",
+        "medium",
+        "power"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-001；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-002",
+      "query": "多接收者多消息签密方案如何抵抗持续性 KGC 攻击，其区块链密钥更新部署又如何兼顾扩展性与安全隔离？",
+      "paper_ids": [
+        "sha1:0715582b4d6744d237ddd5405be85594a3d8ab7b"
+      ],
+      "reference_answer": "方案由多个 KGC 通过门限秘密分享管理主密钥并周期更新子秘密，以抵抗持续性攻击。部署时可由以太坊全节点与多个 KGC 组成安全域，异地扩展多个安全域，同时只暴露全节点实现内外网隔离并降低其他 KGC 的资源消耗。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "06684df1df92ec33dce4",
+        "5f321cd39c8c7ff5486d"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "method-and-deployment",
+        "hard",
+        "cryptography"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-002；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-003",
+      "query": "Mictract 如何把 DevOps 引入智能合约运维，Marbles 案例和志愿者实验分别证明了什么？",
+      "paper_ids": [
+        "sha1:0ca35bd6aa001e1a5caa948391f4036330ace159"
+      ],
+      "reference_answer": "Mictract 通过微服务化、容器编排和 DevOps 工具支持区块链网络搭建、合约部署、升级、监控与测试。Marbles 案例验证改造后合约能正确运行，志愿者实验显示脚本部署平均比 Mictract 多耗时 225.6 秒。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "4be84629605aafc28274",
+        "1be4f0f85589c21df9e1"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "method-and-experiment",
+        "medium",
+        "smart-contract"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-003；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-004",
+      "query": "水产品跨链模型为何选择公证人组和两阶段交易流程，它在大交易量下达到了什么性能？",
+      "paper_ids": [
+        "sha1:2033613147f37d0966ef3623f3f55462a28aed5b"
+      ],
+      "reference_answer": "公证人组负责跨链验证与传输，节点互补避免单点故障；两阶段流程补充超时和失败处理，满足一致性与原子性。实验中平均成功率超过 99%，平均延迟约 0.21 秒。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "288a017ca5b3bbed0767",
+        "a93d900778831f5bde13"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "architecture-and-experiment",
+        "medium",
+        "cross-chain"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-008；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-005",
+      "query": "可监管匿名认证中的 CA、用户和验证者分别做什么，选择性属性披露与欺诈追踪如何共存？",
+      "paper_ids": [
+        "sha1:2b262075f9f609b7b622843e1d0db3296cfa112e"
+      ],
+      "reference_answer": "CA 生成发行和追踪密钥、注册用户并颁发属性证书；验证者指定必须披露的属性；用户签名证书并隐藏无关属性。正常认证时保持匿名和最小披露，发生欺诈时 CA 可利用监管能力追责。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "a49e5292124e7ad2e8b4",
+        "c4e014d15f2ec2cbdd0a"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "roles-and-properties",
+        "medium",
+        "identity"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-010；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-006",
+      "query": "密态征信 SVM 训练如何保证准确率不受影响，与 SPSVM 相比为何更具实用性？",
+      "paper_ids": [
+        "sha1:46c58047b5737142d56083224af7e2b76ae16ebf"
+      ],
+      "reference_answer": "实验表明在安全性得到保证时密态数据仍可用于训练且模型准确率不受影响。SPSVM 的核矩阵需要大量密态欧氏距离计算，耗时随样本规模快速增长并依赖第三方，因此本文机制更适合实际共享场景。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "1ef42b92da2094eba8fa",
+        "3fb47ea4b09464a4dbe6"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "comparison",
+        "hard",
+        "machine-learning"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-015；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-007",
+      "query": "电子病历共享方案中，IPFS、代理重加密、CP-ABE 和 Asmuth-Bloom 秘密共享各自承担什么职责，门限恢复为何安全？",
+      "paper_ids": [
+        "sha1:7292bca58d77e79e14b2186afaa4b221a10b57bc"
+      ],
+      "reference_answer": "病历经代理重加密存入 IPFS，地址上链；CP-ABE 执行患者定义的属性访问策略；Asmuth-Bloom 把密钥分给多方，只有满足门限的参与者协作才能恢复密钥，少于门限无法获得有效秘密。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "610b622f27667db205e4",
+        "1f7914712f559b26a8e7"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "component-responsibility",
+        "hard",
+        "healthcare"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-023；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-reasoning-008",
+      "query": "字节码关键路径漏洞检测如何从控制流图得到检测结果，三类漏洞和实验准确率分别是什么？",
+      "paper_ids": [
+        "sha1:773a3ccba63620b3506fdf0db1c975af37440c7a"
+      ],
+      "reference_answer": "方法从字节码构建执行控制流图，按漏洞特征定义关键指令和规则、生成关键路径，再做规则匹配。它检测可重入、委托调用和时间戳依赖漏洞，在 8000 个以太坊合约上准确率为 93.75%。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "ec363aee30d33600d793",
+        "66ae266f81e408be8722"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "cross-section-reasoning",
+        "method-and-result",
+        "medium",
+        "smart-contract-security"
+      ],
+      "notes": "迁移自 retrieval Golden Set hard-single-024；reference answer 与最小证据集已按 RAGAS 口径复核。"
+    },
+    {
+      "id": "ragas-zh-compare-001",
+      "query": "比较两项绿色能源研究：绿色电力交易系统提供了哪些业务能力，而碳数据管理研究怎样使用绿电溯源结果？",
+      "paper_ids": [
+        "sha1:b268709d345e466820bae4c544860fe34595e1e1",
+        "sha1:c97c0da1a762402375fb16057bb9577124eb1a32"
+      ],
+      "reference_chunk_ids": [
+        "1c2505dcf2779aaa4c5d",
+        "a531cc570e396b1dc711",
+        "de3dd6d966884afe2b15",
+        "becf19cbb152717312a2"
+      ],
+      "reference_answer": "绿色电力交易系统侧重消纳凭证的生成、交易和溯源，并提供高效共识、链上交易与身份认证能力。碳数据管理研究则记录绿色能源种类、用量及流转环节，并将溯源结果用于绿证核发、碳配额计算以及避免重复激励或惩罚。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "green-energy"
+      ],
+      "notes": "比较维度限定为系统业务能力与溯源结果用途；两篇论文的证据分别独立覆盖答案。"
+    },
+    {
+      "id": "ragas-zh-compare-002",
+      "query": "两种可修改区块链方案分别怎样授权和实施账本修改，它们用什么机制维护修改后的链结构？",
+      "paper_ids": [
+        "sha1:5f946645b04893753dadc56d5485348ab81ee4a4",
+        "sha1:65a7996265768e2b9e3a2043dd07f6c2cc62afd7"
+      ],
+      "reference_chunk_ids": [
+        "6c793efa5f858cf1e6b6",
+        "4427bbd5c3d21c1138da",
+        "53f5706704b54e6d302b",
+        "d5bfa85a2d5336d633ce"
+      ],
+      "reference_answer": "第一种方案要求超过阈值的节点同意，再借助陷门单向函数修改目标区块，同时保持其他数据和区块链接关系不变。第二种方案由多个权限节点协作生成变色龙哈希密钥，并通过私钥共识机制控制修改，以避免单中心密钥和门限环签名只能整块删除等限制。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "editable-blockchain"
+      ],
+      "notes": "只比较修改授权与链结构维护机制，不把两篇论文的性能数字混为同一实验。"
+    },
+    {
+      "id": "ragas-zh-compare-003",
+      "query": "园区多边用电权交易与配电系统 P2P 电力市场分别如何组织交易和出清，又怎样处理容量或电网约束？",
+      "paper_ids": [
+        "sha1:543b1b24bf300aea5a94fb6cf7aa4534a25689d2",
+        "sha1:90e19f91f7ef85b889ba8ad653bcc60287ad7a98"
+      ],
+      "reference_chunk_ids": [
+        "b653124786113e7dc0d3",
+        "433b6bfd56c42ebbd249",
+        "f7dae4804c85bfa29b89",
+        "27de670d7bb310be304d"
+      ],
+      "reference_answer": "园区多边用电权交易采用双向拍卖和端对端交易盘活闲置容量，满足临时增容并避免外线扩建，仿真覆盖供需平衡、供小于求和供大于求。配电系统 P2P 市场由事件驱动器启动交易，成员与运营商交互至分布式出清收敛，并用灵敏度、优化模型和拉格朗日乘子把配电网安全约束纳入计算。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "power-market"
+      ],
+      "notes": "比较维度为交易组织、出清方式及约束处理。"
+    },
+    {
+      "id": "ragas-zh-compare-004",
+      "query": "Mictract 与字节码关键路径检测分别解决智能合约生命周期中的什么问题，各自用什么实验说明效果？",
+      "paper_ids": [
+        "sha1:0ca35bd6aa001e1a5caa948391f4036330ace159",
+        "sha1:773a3ccba63620b3506fdf0db1c975af37440c7a"
+      ],
+      "reference_chunk_ids": [
+        "4be84629605aafc28274",
+        "1be4f0f85589c21df9e1",
+        "ec363aee30d33600d793",
+        "66ae266f81e408be8722"
+      ],
+      "reference_answer": "Mictract 面向智能合约部署和监控的自动化，通过微服务化与 DevOps 工具改善运维；Marbles 案例验证合约可运行，志愿者实验显示脚本部署平均多耗时 225.6 秒。关键路径方法面向已部署合约的漏洞检测，从字节码控制流图生成关键路径并匹配规则，在 8000 个以太坊合约上检测三类漏洞，准确率为 93.75%。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "smart-contract"
+      ],
+      "notes": "比较范围限定为生命周期问题、核心机制和各自实验，不做不存在的横向性能排名。"
+    },
+    {
+      "id": "ragas-zh-compare-005",
+      "query": "两项医疗数据研究分别如何保护共享访问与数据完整性，它们依赖的安全机制有什么不同？",
+      "paper_ids": [
+        "sha1:7292bca58d77e79e14b2186afaa4b221a10b57bc",
+        "sha1:839ac51b7c7d45f615a91cbced61ae7ec34ff8fa"
+      ],
+      "reference_chunk_ids": [
+        "610b622f27667db205e4",
+        "1f7914712f559b26a8e7",
+        "4d634c129890a26ca8f1",
+        "5756432f28db574e477a"
+      ],
+      "reference_answer": "电子病历共享方案把代理重加密后的病历存入 IPFS，以 CP-ABE 执行患者定义的访问策略，并用 Asmuth-Bloom 门限秘密共享保护密钥恢复。跨机构临床数据研究则关注数据从捕获到分析的来源、完整性与可追溯性，利用区块链防篡改机制，并以两类篡改场景和马尔科夫链分析攻击过程。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "healthcare"
+      ],
+      "notes": "第一篇回答访问控制和密钥保护，第二篇回答来源完整性和攻击分析。"
+    },
+    {
+      "id": "ragas-zh-compare-006",
+      "query": "分布式随机数仿真系统与平行区块链平台如何构造实验环境，它们分别通过哪些组件或指标评价协议？",
+      "paper_ids": [
+        "sha1:c08ad0f16768e61c5b93f6aff2515ef772900373",
+        "sha1:eeb05c72ef78bc06efc9e37e26b74837d329fbfd"
+      ],
+      "reference_chunk_ids": [
+        "fadf30ede2ffc493aa26",
+        "bbacb349af1e09486701",
+        "4023194a832321fb3be8",
+        "9913f9e745e8a7f90f9c"
+      ],
+      "reference_answer": "分布式随机数仿真系统以核心组件、网络传输、通用处理和对外服务四层实现协议，并比较不同节点数下各阶段耗时、方案间算法耗时和带宽消耗。平行区块链平台以真实链数据为种子生成软件定义人工链，通过场景发生器实例化实验、共识驱动引擎执行协议，再由算法分析工具采集数据并评价和优化协议。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "distributed-systems"
+      ],
+      "notes": "比较维度为实验环境构造和协议评价方式。"
+    },
+    {
+      "id": "ragas-zh-compare-007",
+      "query": "两种车联网方案怎样利用链上信誉识别不可信消息，信誉信息的查询或更新流程有何差异？",
+      "paper_ids": [
+        "sha1:eab26f41d00cbecd778ee1e504171fb62a3094b7",
+        "sha1:ffa17c2023000bcad1e9850a6363a5516f453b71"
+      ],
+      "reference_chunk_ids": [
+        "dad946e597add14a9c64",
+        "57042db9fea2e5eb2ada",
+        "44f955dec3322a62b1b4",
+        "aee9bced23a7dd310f5a"
+      ],
+      "reference_answer": "路况共享方案由 RSU 读取链上车辆信誉并结合消息进行恶意检测，识别共谋节点的虚假路况，聚合结果经共识验证后上链。紧急消息方案通过预缓存或查询后缓存配合智能合约低时延查询信任值，再结合位置和消息新鲜度评估；车辆经过事故区域后提交反馈，RSU 据此增减信任值并提交账本更新。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "vehicular-network"
+      ],
+      "notes": "分别覆盖共谋检测和低时延查询加反馈更新，不外推两方案的直接性能优劣。"
+    },
+    {
+      "id": "ragas-zh-compare-008",
+      "query": "农产品可追溯体系研究与果蔬图区块链研究分别从什么层面提升追溯能力，未来工作重点有什么不同？",
+      "paper_ids": [
+        "sha1:9cfc027bb5676353a85a516ad6135c31acb4ae95",
+        "sha1:b7af2a6f2c5bf626e1a333822dfaddfda4351b5b"
+      ],
+      "reference_chunk_ids": [
+        "ac30a92943ebc907503a",
+        "c811d79116a9f37db880",
+        "504e8552df7c2c167eb0",
+        "2c4dbadb9986775a6ca5"
+      ],
+      "reference_answer": "农产品可追溯体系研究从制度与平台演进层面总结初建、全面推广和数字智能化转型，并提出融合多源异构数据、多模态预警、大模型、数字孪生及跨链协同。果蔬图区块链研究从数据结构层面把顺序表改造成图结构并建立物理区块与图顶点、边的映射，以增强深度关联和查询效率，后续重点是图区块共识的安全性与可扩展性。",
+      "expected_abstain": false,
+      "tags": [
+        "zh",
+        "multi-paper",
+        "cross-paper",
+        "answerable",
+        "comparison",
+        "hard",
+        "traceability"
+      ],
+      "notes": "比较宏观体系演进与具体数据结构创新，并分别保留各自未来方向。"
+    },
+    {
+      "id": "ragas-zh-definition-001",
+      "query": "在区块链数据管理论文的语境中，UTXO 模型怎样表示资产和完成交易？",
+      "paper_ids": [
+        "sha1:961bbd19cf20fb946b9f5f6af866a323fb1fd570"
+      ],
+      "reference_answer": "UTXO 用未花费交易输出表示资产。交易通过消费已有 UTXO 并生成新的 UTXO 来转移资产，因此系统可以直接检查同一个 UTXO 是否被重复消费，从而快速发现双花。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "6d1d2c7704ad59891620"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "single-chunk",
+        "answerable",
+        "definition",
+        "easy",
+        "data-management"
+      ],
+      "notes": "问题显式限定论文语境，避免把通用区块链知识当作未审计证据。"
+    },
+    {
+      "id": "ragas-zh-definition-002",
+      "query": "论文所说的“调频积分”是什么，它有哪些流通方式？",
+      "paper_ids": [
+        "sha1:006f2ca77aea21a555fc1223850a3208d29fd59a"
+      ],
+      "reference_answer": "调频积分是依据机组调频表现增减、用于度量机组数字资产的有限范围代币。它通过量化表现生成，可转给调度中心兑换现值，也可按照智能合约在机组之间进行链上交易。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "47a73f1cf2cd878a3f71"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "single-chunk",
+        "answerable",
+        "definition",
+        "easy",
+        "power"
+      ],
+      "notes": "定义与三种流通动作均由同一节直接支持。"
+    },
+    {
+      "id": "ragas-zh-definition-003",
+      "query": "在高级智能合约转化研究中，SPESC 与 Solidity 分别位于哪一层，它们之间如何映射？",
+      "paper_ids": [
+        "sha1:3491795f0152c2e29541e88c22182129b88b1645"
+      ],
+      "reference_answer": "SPESC 位于高级智能合约层，Solidity 位于可执行的智能合约层。转化规则把 SPESC 的合约当事人定义映射为 Solidity 当事人子合约，并把其余主体内容映射为 Solidity 主体子合约，之后再进入机器代码执行层。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "07a2f09160d15c8b8334"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "single-chunk",
+        "answerable",
+        "definition",
+        "medium",
+        "smart-contract"
+      ],
+      "notes": "只解释论文给出的三层定位和映射关系。"
+    },
+    {
+      "id": "ragas-zh-definition-004",
+      "query": "果蔬追溯研究中的“图区块链”与传统顺序表式区块链有什么区别？",
+      "paper_ids": [
+        "sha1:b7af2a6f2c5bf626e1a333822dfaddfda4351b5b"
+      ],
+      "reference_answer": "图区块链把传统区块链的顺序表存储改造成由顶点、边、标签和属性组成的图结构，并通过映射模型把物理区块对应到图区块的顶点和边，以支持更深的追溯信息关联和更高效的查询。",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "504e8552df7c2c167eb0"
+      ],
+      "tags": [
+        "zh",
+        "single-paper",
+        "single-chunk",
+        "answerable",
+        "definition",
+        "medium",
+        "traceability"
+      ],
+      "notes": "答案不扩展到该论文未定义的通用图数据库性质。"
+    },
+    {
+      "id": "ragas-zh-abstain-001",
+      "query": "该绿色电力交易系统在一百万并发用户条件下的吞吐量和故障恢复时间分别是多少？",
+      "paper_ids": [
+        "sha1:b268709d345e466820bae4c544860fe34595e1e1"
+      ],
+      "reference_answer": null,
+      "expected_abstain": true,
+      "reference_chunk_ids": [],
+      "tags": [
+        "zh",
+        "single-paper",
+        "unanswerable",
+        "missing-experiment",
+        "abstain",
+        "hard",
+        "green-power"
+      ],
+      "notes": "全文未报告一百万并发用户实验或具体故障恢复时间；相关但不可回答。"
+    },
+    {
+      "id": "ragas-zh-abstain-002",
+      "query": "Mictract 在一千节点、跨三个地域的 Hyperledger Fabric 网络中部署失败率是多少？",
+      "paper_ids": [
+        "sha1:0ca35bd6aa001e1a5caa948391f4036330ace159"
+      ],
+      "reference_answer": null,
+      "expected_abstain": true,
+      "reference_chunk_ids": [],
+      "tags": [
+        "zh",
+        "single-paper",
+        "unanswerable",
+        "missing-experiment",
+        "abstain",
+        "hard",
+        "smart-contract"
+      ],
+      "notes": "论文包含部署实验，但未报告该节点规模、跨地域条件或失败率。"
+    },
+    {
+      "id": "ragas-zh-abstain-003",
+      "query": "水产品跨链模型部署到以太坊主网后，每笔交易的平均 Gas 成本是多少？",
+      "paper_ids": [
+        "sha1:2033613147f37d0966ef3623f3f55462a28aed5b"
+      ],
+      "reference_answer": null,
+      "expected_abstain": true,
+      "reference_chunk_ids": [],
+      "tags": [
+        "zh",
+        "single-paper",
+        "unanswerable",
+        "missing-experiment",
+        "abstain",
+        "medium",
+        "cross-chain"
+      ],
+      "notes": "原型基于 Hyperledger Fabric，未给出以太坊主网部署和 Gas 成本。"
+    },
+    {
+      "id": "ragas-zh-abstain-004",
+      "query": "Smart-Target 对 Solana Rust 合约的漏洞检测准确率和平均复现时间是多少？",
+      "paper_ids": [
+        "sha1:dfebe8eb31cb9189fb7f6609c64ba022205342a4"
+      ],
+      "reference_answer": null,
+      "expected_abstain": true,
+      "reference_chunk_ids": [],
+      "tags": [
+        "zh",
+        "single-paper",
+        "unanswerable",
+        "out-of-scope-platform",
+        "abstain",
+        "medium",
+        "smart-contract-security"
+      ],
+      "notes": "研究对象不是 Solana Rust 合约，论文未报告对应准确率或复现时间。"
+    },
+    {
+      "id": "ragas-cross-lingual-001",
+      "query": "What capabilities does the blockchain-based green electricity trading system provide, and what performance did its tests report?",
+      "paper_ids": [
+        "sha1:b268709d345e466820bae4c544860fe34595e1e1"
+      ],
+      "reference_answer": "The system supports the generation, trading, and traceability of green-electricity consumption certificates, together with efficient consensus, on-chain transactions, and identity authentication. Tests reported average response times below 0.06 seconds, throughput above 10,000 TPS, and a 100% pass rate for the evaluated capabilities.",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "1c2505dcf2779aaa4c5d",
+        "a531cc570e396b1dc711"
+      ],
+      "tags": [
+        "en",
+        "cross-lingual",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "method-and-experiment",
+        "hard",
+        "green-power"
+      ],
+      "notes": "英文问题与参考答案对应中文论文证据，用于测试跨语言检索和作答。"
+    },
+    {
+      "id": "ragas-cross-lingual-002",
+      "query": "How does the bytecode critical-path method detect smart-contract vulnerabilities, and which vulnerabilities and accuracy were reported?",
+      "paper_ids": [
+        "sha1:773a3ccba63620b3506fdf0db1c975af37440c7a"
+      ],
+      "reference_answer": "The method builds an execution control-flow graph from bytecode, defines key instructions and rules for vulnerability patterns, generates critical paths, and then performs rule matching. It detects reentrancy, delegate-call, and timestamp-dependency vulnerabilities, with 93.75% accuracy reported on 8,000 Ethereum contracts.",
+      "expected_abstain": false,
+      "reference_chunk_ids": [
+        "ec363aee30d33600d793",
+        "66ae266f81e408be8722"
+      ],
+      "tags": [
+        "en",
+        "cross-lingual",
+        "single-paper",
+        "multi-section",
+        "answerable",
+        "method-and-result",
+        "hard",
+        "smart-contract-security"
+      ],
+      "notes": "英文问题与参考答案对应中文论文证据；数字、漏洞类型和实验规模保持原文口径。"
+    }
+  ]
+}

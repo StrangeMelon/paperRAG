@@ -116,6 +116,30 @@ def test_search_english_and_payload_fields(monkeypatch, tmp_path):
     assert {"chunk_id", "paper_id", "modality", "page", "text", "score_bm25", "rank_bm25"} <= set(
         top
     )
+    assert top["metadata"] == {}
+
+
+def test_search_returns_reference_metadata_from_sqlite(monkeypatch, tmp_path):
+    from sqlmodel import Session
+
+    bm, store = _isolated(monkeypatch, tmp_path)
+    _add_chunks(store, _CORPUS)
+    with Session(store.get_engine()) as session:
+        session.add(
+            store.Chunk(
+                chunk_id="c-ref",
+                paper_id="p-ref",
+                section="References",
+                title="Reference-aware RAG",
+                text="Smith retrieval evidence 2024.",
+                metadata_json='{"is_references": true}',
+            )
+        )
+        session.commit()
+
+    hit = bm.search("retrieval evidence")[0]
+
+    assert hit["metadata"] == {"is_references": True}
 
 
 def test_search_chinese_bigram_recall(monkeypatch, tmp_path):

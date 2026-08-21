@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "test_cases": [
+    {
+      "id": "smoke-001",
+      "query": "What is retrieval augmented generation?",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "reference_answer": "A system that retrieves evidence before generating an answer.",
+      "expected_abstain": false,
+      "tags": ["smoke"]
+    }
+  ]
+}

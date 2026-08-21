@@ -204,7 +204,41 @@ def test_search_rank_and_score_shape(monkeypatch, tmp_path):
     assert [h["rank_bm25"] for h in hits] == list(range(len(hits)))
     scores = [h["score_bm25"] for h in hits]
     assert scores == sorted(scores, reverse=True)
-    assert set(hits[0]) == {"chunk_id", "paper_id", "modality", "text", "score_bm25", "rank_bm25"}
+    assert set(hits[0]) == {
+        "chunk_id",
+        "paper_id",
+        "section",
+        "modality",
+        "text",
+        "title",
+        "metadata",
+        "score_bm25",
+        "rank_bm25",
+    }
+
+
+def test_search_returns_reference_metadata_from_sqlite(monkeypatch, tmp_path):
+    from sqlmodel import Session
+
+    f, store = _isolated(monkeypatch, tmp_path)
+    with Session(store.get_engine()) as session:
+        session.add(
+            store.Chunk(
+                chunk_id="c-ref",
+                paper_id="p-ref",
+                section="References",
+                title="Reference-aware RAG",
+                text="Smith retrieval evidence 2024.",
+                metadata_json='{"is_references": true}',
+            )
+        )
+        session.commit()
+
+    hit = f.search("retrieval evidence")[0]
+
+    assert hit["section"] == "References"
+    assert hit["title"] == "Reference-aware RAG"
+    assert hit["metadata"] == {"is_references": True}
 
 
 def test_sync_paper_incremental_update(monkeypatch, tmp_path):

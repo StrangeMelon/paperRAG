@@ -68,6 +68,21 @@ def test_rrf_merges_fields_and_promotes_score_dense():
     assert top["score_dense"] == 0.9  # 供 abstain 的绝对相似度信号
 
 
+def test_rrf_preserves_reference_metadata_from_sparse_result():
+    dense = [{"chunk_id": "a", "score": 0.9, "text": "T"}]
+    sparse = [
+        {
+            "chunk_id": "a",
+            "score_bm25": 5.0,
+            "metadata": {"is_references": True},
+        }
+    ]
+
+    fused = hybrid.rrf_fuse([dense, sparse])
+
+    assert fused[0]["metadata"] == {"is_references": True}
+
+
 def test_rrf_does_not_mutate_inputs():
     dense_item = {"chunk_id": "a", "score": 0.9}
     sparse_item = {"chunk_id": "a", "score_bm25": 5.0}

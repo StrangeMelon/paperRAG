@@ -31,6 +31,7 @@ class _Paths(BaseModel):
 class _Embedding(BaseModel):
     provider: str = "bge-m3"
     model_name: str = "BAAI/bge-m3"
+    version: str = "bge-m3:v1"
     dim: int = 1024
     batch_size: int = 32
     max_length: int = 8192
@@ -74,6 +75,13 @@ class _Chunk(BaseModel):
     context_prefix_zh: str = "[标题: {title}] [章节: {section}]\n"
 
 
+class _ReferencePolicy(BaseModel):
+    enabled: bool = True
+    penalty: float = Field(default=0.15, ge=0.0, le=1.0)
+    exclude_from_evidence: bool = True
+    legacy_section_fallback: bool = True
+
+
 class _Retrieve(BaseModel):
     top_k_dense: int = 20
     top_k_bm25: int = 20
@@ -83,6 +91,7 @@ class _Retrieve(BaseModel):
     fts5_cjk_bigram: bool = True
     fts5_phrase_max_run: int = 6
     bm25_max_chunks: int = 200000
+    references: _ReferencePolicy = Field(default_factory=_ReferencePolicy)
 
 
 class _Abstain(BaseModel):
@@ -142,6 +151,42 @@ class _Rag(BaseModel):
     qa_cache_ttl_hours: int = 24
     intent: _Intent = Field(default_factory=_Intent)
     abstain: _Abstain = Field(default_factory=_Abstain)
+
+
+class _EvaluationRagas(BaseModel):
+    golden_set: str = "tests/fixtures/evaluation/ragas_golden.json"
+    metrics: list[str] = Field(
+        default_factory=lambda: [
+            "faithfulness",
+            "answer_relevancy",
+            "context_precision",
+            "context_recall",
+        ]
+    )
+    base_url: str | None = None
+    api_key: str | None = None
+    judge_model: str | None = None
+    embedding_base_url: str | None = None
+    embedding_api_key: str | None = None
+    embedding_model: str | None = None
+    max_concurrency: int = Field(default=4, ge=1, le=16)
+    timeout_sec: float = Field(default=120.0, gt=0)
+    max_retries: int = Field(default=3, ge=0)
+    cache_dir: str = "data/evaluation/ragas_cache"
+    judge_options: dict[str, Any] = Field(default_factory=dict)
+
+
+class _Evaluation(BaseModel):
+    enabled: bool = False
+    provider: str = "custom"
+    backends: list[str] = Field(default_factory=lambda: ["custom"])
+    metrics: list[str] = Field(default_factory=lambda: ["hit_rate", "mrr", "recall"])
+    golden_set: str = "tests/fixtures/evaluation/golden.json"
+    retrieval_golden_set: str = "tests/fixtures/evaluation/retrieval_golden.json"
+    top_k: int = Field(default=8, ge=1)
+    max_concurrency: int = Field(default=8, ge=1, le=32)
+    fail_on_error: bool = False
+    ragas: _EvaluationRagas = Field(default_factory=_EvaluationRagas)
 
 
 class _LlmTemperatures(BaseModel):
@@ -313,6 +358,7 @@ class AppConfig(BaseModel):
     chunk: _Chunk = Field(default_factory=_Chunk)
     retrieve: _Retrieve = Field(default_factory=_Retrieve)
     rag: _Rag = Field(default_factory=_Rag)
+    evaluation: _Evaluation = Field(default_factory=_Evaluation)
     llm: _Llm = Field(default_factory=_Llm)
     vision: _Vision = Field(default_factory=_Vision)
     wiki: _Wiki = Field(default_factory=_Wiki)

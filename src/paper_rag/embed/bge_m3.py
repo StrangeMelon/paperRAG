@@ -13,6 +13,7 @@ BGE-M3 原生多语种(中英同空间), 语言链路在此由模型天然承接
 from __future__ import annotations
 
 from collections.abc import Iterable
+from contextlib import nullcontext
 from threading import Lock
 
 from .. import config as cfg
@@ -61,13 +62,15 @@ def _model():
     return _MODEL
 
 
-def encode(texts: Iterable[str]) -> list[list[float]]:
+def encode(texts: Iterable[str], *, allow_concurrent: bool = False) -> list[list[float]]:
     c = cfg.load().embedding
     texts = list(texts)
     if not texts:
         return []
-    # Wiki worker 可并发多篇论文; 单个 GPU 模型的推理与首次加载保持串行。
-    with hold_resource("embedding"), _ENCODE_LOCK:
+    # 在线/入库路径保持单模型串行; Custom 评测显式允许跨题并发推理。
+    guard = hold_resource("embedding") if not allow_concurrent else nullcontext()
+    lock = _ENCODE_LOCK if not allow_concurrent else nullcontext()
+    with guard, lock:
         out = _model().encode(
             texts,
             batch_size=c.batch_size,
@@ -80,5 +83,7 @@ def encode(texts: Iterable[str]) -> list[list[float]]:
     return [vec.tolist() for vec in dense]
 
 
-def encode_one(text: str) -> list[float]:
+def encode_one(text: str, *, allow_concurrent: bool = False) -> list[float]:
+    if allow_concurrent:
+        return encode([text], allow_concurrent=True)[0]
     return encode([text])[0]

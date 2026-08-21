@@ -25,9 +25,11 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 from pathlib import Path
 from typing import Any
 
+from .. import config as cfg
 from ..chunk.builder import build_chunks, read_language
 from ..embed import bge_m3
 from ..ingest.dedup import normalize_title
@@ -35,6 +37,7 @@ from ..ingest.schema import FetchResult
 from ..parse.dispatcher import parse_pdf
 from ..utils.logger import get_logger
 from . import qdrant_store, sqlite_store
+from .incremental import build_chunk_fingerprints, plan_incremental_update
 
 log = get_logger("store.ingest")
 
@@ -171,7 +174,14 @@ def _paper_metadata_chunk(meta, *, language: str | None = None) -> dict[str, Any
     }
 
 
-def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
+def ingest(
+    result: FetchResult,
+    *,
+    force: bool = False,
+    timings: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    total_started = time.perf_counter()
+    timings = timings if timings is not None else {}
     paper_id = result.meta.paper_id
 
     # 跨源去重探测(同 paper_id 不触发)
@@ -193,19 +203,42 @@ def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
 
     sqlite_store.upsert_paper(result.meta.model_dump(mode="json"), status="fetched")
 
+    parse_started = time.perf_counter()
     parsed, parser_name = _step(
         paper_id,
         "parse",
         lambda: parse_pdf(paper_id, result.pdf_path),
     )
+    timings["parse_seconds"] = time.perf_counter() - parse_started
     sqlite_store.set_status(paper_id, "parsed", parsed_with=parser_name)
     language = read_language(Path(parsed))
+
+    chunk_started = time.perf_counter()
+    chunk_timings: dict[str, float] = {}
+    build_kwargs = {"title": result.meta.title}
+
+    def _build_chunks_with_timing():
+        try:
+            return build_chunks(
+                paper_id,
+                Path(parsed),
+                **build_kwargs,
+                timings=chunk_timings,
+            )
+        except TypeError as exc:
+            if "timings" not in str(exc):
+                raise
+            return build_chunks(paper_id, Path(parsed), **build_kwargs)
 
     sections, chunks = _step(
         paper_id,
         "chunk",
-        lambda: build_chunks(paper_id, Path(parsed), title=result.meta.title),
+        _build_chunks_with_timing,
     )
+    build_seconds = time.perf_counter() - chunk_started
+    vision_seconds = chunk_timings.get("vision_seconds", 0.0)
+    timings["vision_seconds"] = vision_seconds
+    timings["chunk_seconds"] = max(0.0, build_seconds - vision_seconds)
     # 真空守卫在插卡之前: 元数据卡片必然存在, 放在插卡后是死代码(基准缺陷)
     if not chunks:
         sqlite_store.set_status(
@@ -213,7 +246,13 @@ def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
         )
         return {"paper_id": paper_id, "status": "failed", "reason": "no_chunks"}
     chunks.insert(0, _paper_metadata_chunk(result.meta, language=language))
+    sqlite_started = time.perf_counter()
+    embedding_version = _embedding_version()
+    chunks = [
+        build_chunk_fingerprints(chunk, embedding_version=embedding_version) for chunk in chunks
+    ]
     sqlite_store.upsert_sections_and_chunks(paper_id, sections, chunks)
+    timings["sqlite_seconds"] = time.perf_counter() - sqlite_started
 
     # 章节完整性打分拼进 parsed_with(如 "mineru+broken"), 供日后过滤坏解析
     try:
@@ -230,23 +269,43 @@ def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
         log.warning(f"section grading skipped: {e}")
     sqlite_store.set_status(paper_id, "chunked")
 
+    incremental_started = time.perf_counter()
+    snapshot_started = time.perf_counter()
+    old_points = _step(
+        paper_id,
+        "qdrant_snapshot",
+        lambda: qdrant_store.list_chunks_for_paper(paper_id),
+    )
+    timings["qdrant_snapshot_seconds"] = time.perf_counter() - snapshot_started
+    plan_started = time.perf_counter()
+    plan = plan_incremental_update(chunks, old_points)
+    timings["incremental_plan_seconds"] = time.perf_counter() - plan_started
+
+    vector_started = time.perf_counter()
     vectors = _step(
         paper_id,
         "embed",
-        lambda: bge_m3.encode([c["context_text"] for c in chunks]),
+        lambda: bge_m3.encode([c["context_text"] for c in plan.vector_updates]),
     )
+    timings["embedding_seconds"] = time.perf_counter() - vector_started
     sqlite_store.set_status(paper_id, "embedded")
 
+    index_started = time.perf_counter()
+    index_timings: dict[str, float] = {}
     _step(
         paper_id,
         "index",
-        lambda: _index_chunks(paper_id, chunks, vectors),
+        lambda: _index_chunks(paper_id, plan, vectors, timings=index_timings),
     )
+    timings["index_seconds"] = time.perf_counter() - index_started
+    timings.update(index_timings)
+    timings["incremental_update_seconds"] = time.perf_counter() - incremental_started
     sqlite_store.set_status(paper_id, "indexed")
     sqlite_store.set_status(paper_id, "done")
 
     # wiki 持久化入队(非阻塞): 语言与内容指纹显式随任务传递, worker 异步消费。
     # force 重建 -> chunk 集合变化 -> 指纹变化 -> 自然产生新任务(幂等键失配)。
+    wiki_started = time.perf_counter()
     try:
         from ..wiki.queue import submit_paper_indexed
 
@@ -258,19 +317,68 @@ def ingest(result: FetchResult, *, force: bool = False) -> dict[str, Any]:
     except Exception as e:
         log.warning(f"wiki enqueue failed (non-fatal): {e}")
         wiki_report = {"error": str(e)}
+    timings["wiki_enqueue_seconds"] = time.perf_counter() - wiki_started
 
-    return {"paper_id": paper_id, "status": "done", "chunks": len(chunks), "wiki": wiki_report}
+    timings["total_seconds"] = time.perf_counter() - total_started
+    out_incremental = {
+        "vector_updates": len(plan.vector_updates),
+        "payload_updates": len(plan.payload_updates),
+        "skipped": len(plan.skipped),
+        "deleted": len(plan.delete_ids),
+    }
+    try:
+        from ..dashboard.services.pipeline_monitor import record_ingestion_run
+
+        record_ingestion_run(
+            paper_id=paper_id,
+            status="done",
+            timings_seconds=timings,
+            metadata={"chunks": len(chunks), "incremental": out_incremental},
+        )
+    except Exception as exc:
+        log.warning(f"pipeline monitor write skipped (non-fatal): {exc}")
+    return {
+        "paper_id": paper_id,
+        "status": "done",
+        "chunks": len(chunks),
+        "wiki": wiki_report,
+        "incremental": out_incremental,
+        "timings": timings or {},
+    }
+
+
+def _embedding_version() -> str:
+    """读取显式 embedding 版本, 兼容尚未加入 version 字段的测试配置。"""
+    embedding = cfg.load().embedding
+    return str(getattr(embedding, "version", "bge-m3:v1"))
 
 
 def _content_fingerprint(chunks: list[dict]) -> str:
     """排序后 chunk_id 集合的 sha1: 与内容切块一一对应, 与入库顺序无关。"""
-    ids = sorted(str(c.get("chunk_id") or "") for c in chunks)
+    ids = sorted(f"{c.get('chunk_id') or ''}\t{c.get('content_id') or ''}" for c in chunks)
     return hashlib.sha1("\n".join(ids).encode("utf-8")).hexdigest()
 
 
-def _replace_qdrant_chunks(paper_id: str, chunks: list[dict], vectors: list[list[float]]) -> int:
-    qdrant_store.delete_chunks_for_paper(paper_id)
-    return qdrant_store.upsert_chunks(chunks, vectors)
+def _index_chunks(
+    paper_id: str,
+    plan,
+    vectors: list[list[float]],
+    *,
+    timings: dict[str, float] | None = None,
+) -> int:
+    """按差量计划同步 Qdrant, 先写新数据再删除旧 Point。"""
+    qdrant_started = time.perf_counter()
+    written = qdrant_store.upsert_chunks(plan.vector_updates, vectors)
+    for item in plan.payload_updates:
+        qdrant_store.overwrite_chunk_payload(item)
+    deleted = qdrant_store.delete_points(plan.delete_ids)
+    if timings is not None:
+        timings["qdrant_write_seconds"] = time.perf_counter() - qdrant_started
+    fts_started = time.perf_counter()
+    _sync_fts5_nonfatal(paper_id)
+    if timings is not None:
+        timings["fts5_sync_seconds"] = time.perf_counter() - fts_started
+    return written + len(plan.payload_updates) + deleted
 
 
 def _sync_fts5_nonfatal(paper_id: str) -> None:
@@ -282,9 +390,3 @@ def _sync_fts5_nonfatal(paper_id: str) -> None:
         fts5.sync_paper(paper_id)
     except Exception as e:
         log.warning(f"fts5 sync skipped (non-fatal): {e}")
-
-
-def _index_chunks(paper_id: str, chunks: list[dict], vectors: list[list[float]]) -> int:
-    n = _replace_qdrant_chunks(paper_id, chunks, vectors)
-    _sync_fts5_nonfatal(paper_id)
-    return n

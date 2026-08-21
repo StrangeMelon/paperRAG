@@ -22,6 +22,8 @@ from __future__ import annotations
 import re
 from collections import Counter
 
+from ..retrieve.reference_policy import detect_reference_intent, filter_answer_evidence
+
 _LATIN_TOKEN_RE = re.compile(r"[a-z0-9]+")
 _CJK_RUN_RE = re.compile(r"[㐀-䶿一-鿿豈-﫿]+")
 _SECTION_HINTS = (
@@ -53,16 +55,35 @@ def select_evidence(
     intent: str | None = None,
     max_chunks: int = 4,
     max_per_paper: int = 2,
+    reference_intent: bool | None = None,
 ) -> tuple[list[dict], dict]:
     """从检索块中挑出紧凑、可引用的证据集。
 
     确定性选择: rerank/RRF 分数承担大部分权重, 词面重叠裁决平局,
     章节/标题提示提供微小推力。
     """
+    input_chunks = list(chunks)
+    resolved_reference_intent = (
+        detect_reference_intent(question) if reference_intent is None else reference_intent
+    )
+    chunks = filter_answer_evidence(
+        input_chunks,
+        reference_intent=resolved_reference_intent,
+    )
+    eligible_ids = {id(chunk) for chunk in chunks}
+    excluded_reference_chunk_ids = [
+        chunk.get("chunk_id")
+        for chunk in input_chunks
+        if id(chunk) not in eligible_ids and chunk.get("chunk_id")
+    ]
     if not chunks:
         return [], {
             "strategy": "deterministic_score_overlap",
             "selected_chunk_ids": [],
+            "input_chunk_ids": [
+                chunk.get("chunk_id") for chunk in input_chunks if chunk.get("chunk_id")
+            ],
+            "excluded_reference_chunk_ids": excluded_reference_chunk_ids,
             "max_chunks": max_chunks,
             "max_per_paper": max_per_paper,
             "candidates": [],
@@ -91,7 +112,8 @@ def select_evidence(
         "intent": intent or "unknown",
         "max_chunks": max_chunks,
         "max_per_paper": max_per_paper,
-        "input_chunk_ids": [c.get("chunk_id") for c in chunks if c.get("chunk_id")],
+        "input_chunk_ids": [c.get("chunk_id") for c in input_chunks if c.get("chunk_id")],
+        "excluded_reference_chunk_ids": excluded_reference_chunk_ids,
         "selected_chunk_ids": [c.get("chunk_id") for c in selected if c.get("chunk_id")],
         "candidates": [
             {

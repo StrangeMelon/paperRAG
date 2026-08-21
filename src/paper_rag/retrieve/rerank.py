@@ -18,6 +18,9 @@ bi-encoder(dense)在入库时独立编码文档, 不知道将来的查询; cross
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+from threading import Lock
+
 from .. import config as cfg
 from ..mcp.resource_guards import hold_resource
 from ..utils.hf_cache import resolve_cached_snapshot
@@ -26,6 +29,7 @@ from ..utils.logger import get_logger
 log = get_logger("retrieve.rerank")
 _MODEL = None
 _LOAD_FAILED = False
+_MODEL_LOCK = Lock()
 
 
 def _model():
@@ -33,38 +37,47 @@ def _model():
     if _LOAD_FAILED:
         return None
     if _MODEL is None:
-        try:
-            from FlagEmbedding import FlagReranker
-        except ImportError as e:
-            log.warning(f"FlagEmbedding not installed: {e}; reranker disabled")
-            _LOAD_FAILED = True
-            return None
-        c = cfg.load()
-        cache_dir = c.reranker.cache_dir or c.paths.models_dir
-        model_name = resolve_cached_snapshot(c.reranker.model_name, cache_dir)
-        use_fp16 = bool(c.reranker.use_fp16)
-        if use_fp16:
+        with _MODEL_LOCK:
+            if _MODEL is not None or _LOAD_FAILED:
+                return _MODEL
             try:
-                import torch
+                from FlagEmbedding import FlagReranker
+            except ImportError as e:
+                log.warning(f"FlagEmbedding not installed: {e}; reranker disabled")
+                _LOAD_FAILED = True
+                return None
+            c = cfg.load()
+            cache_dir = c.reranker.cache_dir or c.paths.models_dir
+            model_name = resolve_cached_snapshot(c.reranker.model_name, cache_dir)
+            use_fp16 = bool(c.reranker.use_fp16)
+            if use_fp16:
+                try:
+                    import torch
 
-                use_fp16 = bool(torch.cuda.is_available())
-            except Exception:
-                use_fp16 = False
-        log.info(f"loading reranker {model_name} (cache={cache_dir})")
-        try:
-            _MODEL = FlagReranker(
-                model_name,
-                use_fp16=use_fp16,
-                cache_dir=cache_dir,
-            )
-        except Exception as e:
-            log.warning(f"reranker load failed: {e}; falling back to RRF order")
-            _LOAD_FAILED = True
-            return None
+                    use_fp16 = bool(torch.cuda.is_available())
+                except Exception:
+                    use_fp16 = False
+            log.info(f"loading reranker {model_name} (cache={cache_dir})")
+            try:
+                _MODEL = FlagReranker(
+                    model_name,
+                    use_fp16=use_fp16,
+                    cache_dir=cache_dir,
+                )
+            except Exception as e:
+                log.warning(f"reranker load failed: {e}; falling back to RRF order")
+                _LOAD_FAILED = True
+                return None
     return _MODEL
 
 
-def rerank(query: str, candidates: list[dict], *, top_k: int | None = None) -> list[dict]:
+def rerank(
+    query: str,
+    candidates: list[dict],
+    *,
+    top_k: int | None = None,
+    allow_concurrent: bool = False,
+) -> list[dict]:
     """按查询-文档相关性重排候选; 任何故障回退 RRF 原序截断。"""
     if not candidates:
         return []
@@ -73,7 +86,8 @@ def rerank(query: str, candidates: list[dict], *, top_k: int | None = None) -> l
     if not c.reranker.enabled:
         return candidates[:top_k]
 
-    with hold_resource("reranker"):
+    guard = nullcontext() if allow_concurrent else hold_resource("reranker")
+    with guard:
         model = _model()
         if model is None:
             return candidates[:top_k]

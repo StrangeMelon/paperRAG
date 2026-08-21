@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -170,3 +172,17 @@ def test_rerank_holds_resource_during_model_execution(monkeypatch):
     rr.rerank("q", _cands(1))
 
     assert events == ["enter:reranker", "exit:reranker"]
+
+
+def test_evaluation_rerank_calls_can_run_concurrently(monkeypatch):
+    _conf(monkeypatch, top_k=1)
+    barrier = threading.Barrier(2, timeout=2)
+    model = SimpleNamespace(compute_score=lambda pairs, normalize: (barrier.wait(), [0.8])[1])
+    monkeypatch.setattr(rr, "_model", lambda: model)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(rr.rerank, query, _cands(1), allow_concurrent=True)
+            for query in ("q1", "q2")
+        ]
+        assert [future.result() for future in futures]

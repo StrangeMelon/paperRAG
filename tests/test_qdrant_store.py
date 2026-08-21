@@ -19,9 +19,7 @@ class _FakeClient:
 
 
 def _qdrant_module() -> ModuleType:
-    return importlib.import_module(
-        "paper_rag.store.qdrant_store"
-    )
+    return importlib.import_module("paper_rag.store.qdrant_store")
 
 
 def _install_fake_client_factory(
@@ -64,17 +62,17 @@ def _set_qdrant_config(
     monkeypatch.setattr(store, "_ATEXIT_REGISTERED", False)
 
 
-def test_stable_point_id_is_deterministic_unsigned_64_bit() -> None:
+def test_stable_point_id_is_deterministic_uuid() -> None:
     store = _qdrant_module()
 
-    first = store._stable_point_id("chunk:paper-1:0")
-    repeated = store._stable_point_id("chunk:paper-1:0")
-    different = store._stable_point_id("chunk:paper-1:1")
+    first = store._stable_point_id("paper-1", "chunk:0")
+    repeated = store._stable_point_id("paper-1", "chunk:0")
+    different = store._stable_point_id("paper-1", "chunk:1")
 
     assert first == repeated
     assert first != different
-    assert isinstance(first, int)
-    assert 0 <= first < 2**64
+    assert isinstance(first, str)
+    assert len(first) == 36
 
 
 def test_get_client_caches_server_client_and_registers_cleanup(
@@ -101,9 +99,7 @@ def test_get_client_caches_server_client_and_registers_cleanup(
 
     assert first is second
     assert len(created_clients) == 1
-    assert created_clients[0].kwargs == {
-        "url": "http://localhost:6333"
-    }
+    assert created_clients[0].kwargs == {"url": "http://localhost:6333"}
     assert registered_callbacks == [store.close_client]
 
 
@@ -179,6 +175,7 @@ def test_close_client_clears_cache_and_suppresses_close_errors(
     assert failing_client.close_calls == 1
     assert store._CLIENT is None
 
+
 # 测试写入、删除、检索、旧客户端兼容和故障降级契约
 class _OperationClient:
     def __init__(self) -> None:
@@ -190,6 +187,84 @@ class _OperationClient:
 
     def delete(self, **kwargs) -> None:
         self.delete_call = kwargs
+
+
+class _SnapshotClient:
+    def __init__(self) -> None:
+        self.scroll_calls: list[dict] = []
+        self.overwrite_call = None
+        self.delete_call = None
+
+    def scroll(self, **kwargs):
+        self.scroll_calls.append(kwargs)
+        if len(self.scroll_calls) == 1:
+            return (
+                [
+                    SimpleNamespace(
+                        id="old-1",
+                        payload={
+                            "paper_id": "paper:one",
+                            "chunk_id": "chunk:one",
+                            "content_id": "content-1",
+                        },
+                    )
+                ],
+                None,
+            )
+        return [], None
+
+    def overwrite_payload(self, **kwargs) -> None:
+        self.overwrite_call = kwargs
+
+    def delete(self, **kwargs) -> None:
+        self.delete_call = kwargs
+
+
+def test_list_chunks_for_paper_scrolls_with_payload_filter(monkeypatch) -> None:
+    store = _qdrant_module()
+    client = _SnapshotClient()
+    _set_qdrant_config(store, monkeypatch, url="http://localhost:6333", local_path=None)
+    monkeypatch.setattr(store, "get_client", lambda: client)
+
+    result = store.list_chunks_for_paper("paper:one", page_size=10)
+
+    assert result == [
+        {
+            "paper_id": "paper:one",
+            "chunk_id": "chunk:one",
+            "content_id": "content-1",
+            "point_id": "old-1",
+        }
+    ]
+    assert client.scroll_calls[0]["limit"] == 10
+    assert client.scroll_calls[0]["with_vectors"] is False
+    assert client.scroll_calls[0]["scroll_filter"].must[0].key == "paper_id"
+
+
+def test_overwrite_payload_uses_expected_uuid_and_waits(monkeypatch) -> None:
+    store = _qdrant_module()
+    client = _SnapshotClient()
+    _set_qdrant_config(store, monkeypatch, url="http://localhost:6333", local_path=None)
+    monkeypatch.setattr(store, "get_client", lambda: client)
+
+    store.overwrite_chunk_payload({"paper_id": "paper:one", "chunk_id": "chunk:one", "text": "new"})
+
+    assert client.overwrite_call["points"] == [store._stable_point_id("paper:one", "chunk:one")]
+    assert client.overwrite_call["payload"]["text"] == "new"
+    assert client.overwrite_call["wait"] is True
+
+
+def test_delete_points_uses_exact_ids_and_deduplicates(monkeypatch) -> None:
+    store = _qdrant_module()
+    client = _SnapshotClient()
+    _set_qdrant_config(store, monkeypatch, url="http://localhost:6333", local_path=None)
+    monkeypatch.setattr(store, "get_client", lambda: client)
+
+    count = store.delete_points(["old-1", "old-1", "old-2"])
+
+    assert count == 2
+    assert client.delete_call["points_selector"] == ["old-1", "old-2"]
+    assert client.delete_call["wait"] is True
 
 
 def test_upsert_chunks_builds_points_and_payloads(
@@ -232,14 +307,14 @@ def test_upsert_chunks_builds_points_and_payloads(
     assert client.upsert_call["wait"] is True
 
     points = client.upsert_call["points"]
-    assert points[0].id == store._stable_point_id("chunk:one")
+    assert points[0].id == store._stable_point_id("paper:one", "chunk:one")
     assert points[0].vector == [0.1, 0.2]
     assert points[0].payload == {
         "chunk_id": "chunk:one",
         "paper_id": "paper:one",
         "text": "First chunk",
     }
-    assert points[1].id == store._stable_point_id("chunk:two")
+    assert points[1].id == store._stable_point_id("paper:two", "chunk:two")
 
 
 def test_upsert_chunks_rejects_misaligned_items_and_vectors() -> None:
@@ -300,6 +375,7 @@ def test_search_uses_query_points_and_metadata_filters(
                             "chunk_id": "chunk:figure",
                             "paper_id": "paper:one",
                             "modality": "figure",
+                            "metadata": {"is_references": True},
                         },
                         score=0.87,
                     )
@@ -328,6 +404,7 @@ def test_search_uses_query_points_and_metadata_filters(
             "chunk_id": "chunk:figure",
             "paper_id": "paper:one",
             "modality": "figure",
+            "metadata": {"is_references": True},
             "score": 0.87,
         }
     ]

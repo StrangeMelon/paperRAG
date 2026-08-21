@@ -53,6 +53,16 @@ def init_qdrant() -> None:
                 f"(dim={config.embedding.dim}, "
                 f"distance={config.qdrant.distance})"
             )
+
+        client.create_payload_index(
+            collection_name=config.qdrant.collection_chunks,
+            field_name="paper_id",
+            field_schema=qdrant_models.PayloadSchemaType.KEYWORD,
+            wait=True,
+        )
+        log.info(
+            f"ensured Qdrant payload index: {config.qdrant.collection_chunks}.paper_id (keyword)"
+        )
     finally:
         qdrant_store.close_client()
 

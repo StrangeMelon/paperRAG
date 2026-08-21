@@ -136,6 +136,27 @@ def test_concurrent_encode_calls_are_serialized(monkeypatch) -> None:
     assert fake.max_active == 1
 
 
+def test_evaluation_encode_calls_can_run_concurrently(monkeypatch) -> None:
+    class _SlowModel(_FakeModel):
+        def __init__(self) -> None:
+            super().__init__()
+            self.barrier = threading.Barrier(2, timeout=2)
+
+        def encode(self, texts, **kwargs):
+            self.barrier.wait()
+            return super().encode(texts, **kwargs)
+
+    fake = _SlowModel()
+    monkeypatch.setattr(bge, "_model", lambda: fake)
+    _patch_config(monkeypatch)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(bge.encode_one, text, allow_concurrent=True) for text in ("a", "b")
+        ]
+        assert [future.result() for future in futures]
+
+
 def test_encode_holds_embedding_resource_for_model_execution(monkeypatch) -> None:
     fake = _FakeModel()
     events: list[str] = []

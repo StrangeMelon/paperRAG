@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from inspect import Parameter, signature
+from time import perf_counter
 from typing import Any, Protocol
 
 from .. import config as cfg
 from ..mcp.errors import InvalidPaperScopeError, PaperRagToolError, RetrievalUnavailableError
+from ..retrieve.reference_policy import detect_reference_intent, filter_answer_evidence
 from ..store.sqlite_store import get_papers_by_ids
 from ..utils.logger import get_logger
 
@@ -97,6 +100,9 @@ def _retrieve_round_default(
     paper_ids: list[str] | None,
     top_k: int,
     wiki_context: dict[str, Any],
+    timings: dict[str, float] | None = None,
+    *,
+    reference_intent: bool | None = None,
 ):
     from ..retrieve.pipeline import retrieve_round_with_rewrite
 
@@ -105,6 +111,8 @@ def _retrieve_round_default(
         paper_ids,
         top_k,
         wiki_context=wiki_context,
+        timings=timings,
+        reference_intent=reference_intent,
     )
 
 
@@ -177,11 +185,56 @@ def build_default_dependencies() -> RetrievalDependencies:
     )
 
 
-def _split_retrieval_result(result: Any) -> tuple[list[dict], dict[str, Any]]:
+def _split_retrieval_result(result: Any) -> tuple[list[dict], dict[str, Any], dict[str, float]]:
+    if isinstance(result, tuple) and len(result) == 3:
+        chunks, rewrite, timings = result
+        return list(chunks), dict(rewrite or {}), dict(timings or {})
     if isinstance(result, tuple) and len(result) == 2:
         chunks, rewrite = result
-        return list(chunks), dict(rewrite or {})
-    return list(result or []), {}
+        return list(chunks), dict(rewrite or {}), {}
+    return list(result or []), {}, {}
+
+
+def _reference_policy_options() -> dict[str, Any]:
+    loaded = cfg.load()
+    retrieve_cfg = getattr(loaded, "retrieve", None)
+    reference_cfg = getattr(retrieve_cfg, "references", None)
+    return {
+        "enabled": bool(getattr(reference_cfg, "enabled", True)),
+        "exclude_from_evidence": bool(getattr(reference_cfg, "exclude_from_evidence", True)),
+        "legacy_section_fallback": bool(getattr(reference_cfg, "legacy_section_fallback", True)),
+    }
+
+
+def _call_retrieve_round(
+    retrieve_fn: Callable[..., Any],
+    query: str,
+    paper_ids: list[str] | None,
+    top_k: int,
+    wiki_context: dict[str, Any],
+    timings: dict[str, float],
+    reference_intent: bool,
+) -> Any:
+    """Call injected legacy/new retrieval functions without hiding internal TypeErrors."""
+    try:
+        parameters = signature(retrieve_fn).parameters
+    except (TypeError, ValueError):
+        return retrieve_fn(query, paper_ids, top_k, wiki_context)
+
+    has_varargs = any(param.kind is Parameter.VAR_POSITIONAL for param in parameters.values())
+    has_varkw = any(param.kind is Parameter.VAR_KEYWORD for param in parameters.values())
+    positional = [
+        param
+        for param in parameters.values()
+        if param.kind in {Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD}
+    ]
+    args: list[Any] = [query, paper_ids, top_k, wiki_context]
+    if has_varargs or len(positional) >= 5:
+        args.append(timings)
+    kwargs: dict[str, Any] = {}
+    if has_varkw or "reference_intent" in parameters:
+        kwargs["reference_intent"] = reference_intent
+    return retrieve_fn(*args, **kwargs)
 
 
 def _retrieve_loop(
@@ -193,6 +246,8 @@ def _retrieve_loop(
     enable_reflect: bool,
     wiki_context: dict[str, Any],
     dependencies: RetrievalDependencies,
+    reference_intent: bool,
+    reference_options: dict[str, Any],
 ) -> tuple[list[dict], list[dict], list[dict], str]:
     from ..retrieve.format import format_evidence
 
@@ -203,13 +258,21 @@ def _retrieve_loop(
     stopped_by = "max_iters"
 
     for iteration in range(max_iter):
-        result = dependencies.retrieve_round(
+        iteration_started = perf_counter()
+        retrieval_started = perf_counter()
+        captured_timings: dict[str, float] = {}
+        result = _call_retrieve_round(
+            dependencies.retrieve_round,
             current_query,
             paper_ids,
             top_k,
             wiki_context,
+            captured_timings,
+            reference_intent,
         )
-        chunks, rewrite = _split_retrieval_result(result)
+        retrieval_latency_ms = round((perf_counter() - retrieval_started) * 1000, 1)
+        chunks, rewrite, returned_timings = _split_retrieval_result(result)
+        module_timings = returned_timings or captured_timings
         if rewrite:
             rewrites.append(rewrite)
         for chunk in chunks:
@@ -218,14 +281,53 @@ def _retrieve_loop(
                 candidates[chunk_id] = chunk
 
         if not chunks:
-            iterations.append({"query": current_query, "n_retrieved": 0, "reflect": None})
+            iterations.append(
+                {
+                    "query": current_query,
+                    "n_retrieved": 0,
+                    "reflect": None,
+                    "retrieval_latency_ms": retrieval_latency_ms,
+                    "module_timings_ms": module_timings,
+                    "iteration_latency_ms": round((perf_counter() - iteration_started) * 1000, 1),
+                }
+            )
             stopped_by = "no_evidence"
             break
 
-        if enable_reflect and iteration < max_iter - 1:
-            reflection = dependencies.reflect(question, format_evidence(chunks))
+        eligible_round_chunks = filter_answer_evidence(
+            chunks,
+            reference_intent=reference_intent,
+            **reference_options,
+        )
+        if not eligible_round_chunks:
             iterations.append(
-                {"query": current_query, "n_retrieved": len(chunks), "reflect": reflection}
+                {
+                    "query": current_query,
+                    "n_retrieved": len(chunks),
+                    "n_eligible": 0,
+                    "reflect": None,
+                    "retrieval_latency_ms": retrieval_latency_ms,
+                    "module_timings_ms": module_timings,
+                    "iteration_latency_ms": round((perf_counter() - iteration_started) * 1000, 1),
+                }
+            )
+            stopped_by = "reference_only"
+            break
+
+        if enable_reflect and iteration < max_iter - 1:
+            reflect_started = perf_counter()
+            reflection = dependencies.reflect(question, format_evidence(eligible_round_chunks))
+            reflect_latency_ms = round((perf_counter() - reflect_started) * 1000, 1)
+            iterations.append(
+                {
+                    "query": current_query,
+                    "n_retrieved": len(chunks),
+                    "reflect": reflection,
+                    "retrieval_latency_ms": retrieval_latency_ms,
+                    "module_timings_ms": module_timings,
+                    "reflect_latency_ms": reflect_latency_ms,
+                    "iteration_latency_ms": round((perf_counter() - iteration_started) * 1000, 1),
+                }
             )
             if reflection.get("sufficiency") == "sufficient":
                 stopped_by = "answered"
@@ -237,7 +339,16 @@ def _retrieve_loop(
             stopped_by = "answered"
             break
 
-        iterations.append({"query": current_query, "n_retrieved": len(chunks), "reflect": None})
+        iterations.append(
+            {
+                "query": current_query,
+                "n_retrieved": len(chunks),
+                "reflect": None,
+                "retrieval_latency_ms": retrieval_latency_ms,
+                "module_timings_ms": module_timings,
+                "iteration_latency_ms": round((perf_counter() - iteration_started) * 1000, 1),
+            }
+        )
         stopped_by = "answered"
         break
 
@@ -261,6 +372,8 @@ def retrieve_evidence(
 
     wiki_context = deps.resolve_wiki(query, validated_scope)
     intent = deps.classify_intent(query)
+    reference_intent = detect_reference_intent(query)
+    reference_options = _reference_policy_options()
     rag_cfg = cfg.load().rag
     top_k = int(intent["top_k"])
     max_iter = min(int(intent["max_iter"]), int(rag_cfg.max_inner_iters))
@@ -273,12 +386,25 @@ def retrieve_evidence(
             enable_reflect=bool(rag_cfg.enable_reflect),
             wiki_context=wiki_context,
             dependencies=deps,
+            reference_intent=reference_intent,
+            reference_options=reference_options,
         )
     except PaperRagToolError:
         raise
     except Exception as exc:
         raise RetrievalUnavailableError(details={"stage": "retrieve"}) from exc
     final_candidates = candidates[: top_k * 2]
+    eligible_candidates = filter_answer_evidence(
+        final_candidates,
+        reference_intent=reference_intent,
+        **reference_options,
+    )
+    eligible_ids = {id(chunk) for chunk in eligible_candidates}
+    excluded_reference_chunk_ids = [
+        str(chunk["chunk_id"])
+        for chunk in final_candidates
+        if id(chunk) not in eligible_ids and chunk.get("chunk_id")
+    ]
 
     if not final_candidates:
         internal_decision = "no_chunks"
@@ -289,8 +415,18 @@ def retrieve_evidence(
         }
         evidence_chunks: list[dict] = []
         evidence_selection: dict[str, Any] = {}
+    elif not eligible_candidates:
+        internal_decision = "no_evidence"
+        abstain = {
+            "decision": "no_evidence",
+            "evidence_score": 0.0,
+            "n_chunks": 0,
+            "reason": "reference_only",
+        }
+        evidence_chunks = []
+        evidence_selection = {}
     else:
-        abstain = deps.decide_abstain(final_candidates)
+        abstain = deps.decide_abstain(eligible_candidates)
         internal_decision = str(abstain["decision"])
         if internal_decision == "no_evidence":
             evidence_chunks = []
@@ -298,7 +434,7 @@ def retrieve_evidence(
         else:
             evidence_chunks, evidence_selection = deps.select_evidence(
                 query,
-                final_candidates,
+                eligible_candidates,
                 intent.get("intent"),
                 max_evidence,
             )
@@ -329,11 +465,38 @@ def retrieve_evidence(
         "abstain": abstain,
         "evidence_selection": evidence_selection,
         "evidence_chunk_ids": allowed_chunk_ids,
+        "reference_policy": {
+            **reference_options,
+            "intent": reference_intent,
+            "excluded_chunk_ids": excluded_reference_chunk_ids,
+        },
         "wiki_context": wiki_context,
         "include_wiki": include_wiki,
         "wiki_max_entries": wiki_max_entries,
         "wiki_entries": wiki_entries,
     }
+    try:
+        from ..dashboard.services.pipeline_monitor import record_retrieval_run
+
+        module_totals: dict[str, float] = {}
+        for item in iterations:
+            for name, value in (item.get("module_timings_ms") or {}).items():
+                module_totals[name] = module_totals.get(name, 0.0) + float(value)
+        module_totals["retrieval_total_ms"] = sum(
+            float(item.get("retrieval_latency_ms", 0.0)) for item in iterations
+        )
+        record_retrieval_run(
+            query=query,
+            status="ok",
+            timings_ms=module_totals,
+            metadata={
+                "iterations": iterations,
+                "n_candidates": len(final_candidates),
+                "n_evidence": len(evidence_chunks),
+            },
+        )
+    except Exception as exc:
+        log.warning(f"pipeline monitor write skipped (non-fatal): {exc}")
     return RetrievalExecution(
         retrieval_id=retrieval_id,
         public_decision=public_decision,

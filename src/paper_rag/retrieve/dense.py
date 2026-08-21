@@ -15,8 +15,13 @@ def retrieve(
     top_k: int = 8,
     paper_ids: list[str] | None = None,
     modality: str | None = None,
+    allow_concurrent: bool = False,
 ) -> list[dict]:
-    qvec = bge_m3.encode_one(query)
+    qvec = (
+        bge_m3.encode_one(query, allow_concurrent=True)
+        if allow_concurrent
+        else bge_m3.encode_one(query)
+    )
     return qdrant_store.search(
         qvec,
         top_k=top_k,

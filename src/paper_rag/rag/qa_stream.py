@@ -32,10 +32,12 @@ b) `_stream_chat` 补 `llm.extra_body` 透传——基准漏配: llm 课的透�
 from __future__ import annotations
 
 from collections.abc import Generator
+from inspect import Parameter, signature
 
 from .. import config as cfg
 from ..retrieve.format import format_evidence
 from ..retrieve.pipeline import retrieve_round_with_rewrite
+from ..retrieve.reference_policy import detect_reference_intent, filter_answer_evidence
 from ..utils.logger import get_logger
 from . import abstain as abstain_mod
 from .citation_check import (
@@ -72,9 +74,53 @@ _NO_CHUNKS_MSG = "(no evidence found)"
 _NO_CHUNKS_MSG_ZH = "(未检索到证据)"
 
 
-def _retrieve_round(query: str, paper_ids, top_k: int) -> tuple[list[dict], dict]:
+def _retrieve_round(
+    query: str,
+    paper_ids,
+    top_k: int,
+    *,
+    reference_intent: bool | None = None,
+) -> tuple[list[dict], dict]:
     # 传本模块的 `rewrite` 引用, monkeypatch qa_stream.rewrite 的测试仍然生效。
-    return retrieve_round_with_rewrite(query, paper_ids, top_k, rewrite_fn=rewrite)
+    return retrieve_round_with_rewrite(
+        query,
+        paper_ids,
+        top_k,
+        rewrite_fn=rewrite,
+        reference_intent=reference_intent,
+    )
+
+
+def _reference_options(loaded_config) -> dict:
+    retrieve_cfg = getattr(loaded_config, "retrieve", None)
+    reference_cfg = getattr(retrieve_cfg, "references", None)
+    return {
+        "enabled": bool(getattr(reference_cfg, "enabled", True)),
+        "exclude_from_evidence": bool(getattr(reference_cfg, "exclude_from_evidence", True)),
+        "legacy_section_fallback": bool(getattr(reference_cfg, "legacy_section_fallback", True)),
+    }
+
+
+def _call_retrieve_round(
+    query: str,
+    paper_ids: list[str] | None,
+    top_k: int,
+    *,
+    reference_intent: bool,
+) -> tuple[list[dict], dict]:
+    """Retain compatibility with injected three-argument retrieval functions."""
+    parameters = signature(_retrieve_round).parameters
+    supports_keyword = "reference_intent" in parameters or any(
+        param.kind is Parameter.VAR_KEYWORD for param in parameters.values()
+    )
+    if supports_keyword:
+        return _retrieve_round(
+            query,
+            paper_ids,
+            top_k,
+            reference_intent=reference_intent,
+        )
+    return _retrieve_round(query, paper_ids, top_k)
 
 
 def _no_evidence_message(abstain_cfg, language: str) -> str:
@@ -88,8 +134,11 @@ def stream_answer(
     question: str, *, paper_ids: list[str] | None = None
 ) -> Generator[dict, None, None]:
     """随 agentic 管道推进逐事件 yield。"""
-    c = cfg.load().rag
+    loaded_config = cfg.load()
+    c = loaded_config.rag
     language = _query_language(question)
+    reference_intent = detect_reference_intent(question)
+    reference_options = _reference_options(loaded_config)
     intent_cfg = classify(question)
     yield {"event": "intent", "data": intent_cfg}
 
@@ -100,7 +149,12 @@ def stream_answer(
 
     for it in range(max_iter):
         try:
-            chunks, rw = _retrieve_round(current_query, paper_ids, top_k)
+            chunks, rw = _call_retrieve_round(
+                current_query,
+                paper_ids,
+                top_k,
+                reference_intent=reference_intent,
+            )
         except Exception as e:
             yield {"event": "error", "data": {"message": f"retrieve failed: {e}"}}
             return
@@ -120,8 +174,15 @@ def stream_answer(
 
         if not chunks:
             break
+        eligible_round_chunks = filter_answer_evidence(
+            chunks,
+            reference_intent=reference_intent,
+            **reference_options,
+        )
+        if not eligible_round_chunks:
+            break
         if c.enable_reflect and it < max_iter - 1:
-            r = reflect(question, format_evidence(chunks))
+            r = reflect(question, format_evidence(eligible_round_chunks))
             yield {"event": "reflect", "data": r}
             if r["sufficiency"] == "sufficient":
                 break
@@ -146,10 +207,37 @@ def stream_answer(
         }
         return
 
+    eligible_chunks = filter_answer_evidence(
+        final_chunks,
+        reference_intent=reference_intent,
+        **reference_options,
+    )
+    if not eligible_chunks:
+        abstain_result = {
+            "decision": abstain_mod.DECISION_NO_EVIDENCE,
+            "evidence_score": 0.0,
+            "n_chunks": 0,
+            "reason": "reference_only",
+        }
+        yield {"event": "abstain", "data": abstain_result}
+        message = _no_evidence_message(c.abstain, language)
+        yield {"event": "answer_chunk", "data": {"text": message}}
+        yield {
+            "event": "done",
+            "data": {
+                "answer": message,
+                "citations": [],
+                "suspicious": {"count": 0},
+                "abstain": abstain_result,
+                "n_chunks": len(final_chunks),
+            },
+        }
+        return
+
     # === ADR-0014 abstain 裁决 ===
     abstain_cfg = c.abstain
     abstain_result = abstain_mod.decide(
-        final_chunks,
+        eligible_chunks,
         enabled=abstain_cfg.enabled,
         threshold_low=abstain_cfg.threshold_low,
         threshold_high=abstain_cfg.threshold_high,
@@ -175,7 +263,7 @@ def stream_answer(
 
     evidence_chunks, evidence_selection = select_evidence(
         question,
-        final_chunks,
+        eligible_chunks,
         intent=intent_cfg.get("intent"),
     )
 

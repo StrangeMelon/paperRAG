@@ -101,7 +101,7 @@ def _wire(
     )
     rounds = list(chunks_per_round)
 
-    def _retrieve(query, paper_ids, top_k):
+    def _retrieve(query, paper_ids, top_k, *, reference_intent=None):
         if retrieve_error is not None:
             raise retrieve_error
         return (rounds.pop(0) if rounds else []), _RW
@@ -259,6 +259,61 @@ def test_confident_no_hint(monkeypatch):
     fake = _wire(monkeypatch, chunks_per_round=[[_chunk(_ID_A), _chunk(_ID_B), _chunk(_ID_C)]])
     _events()
     assert "WEAK" not in fake.user
+
+
+def test_regular_question_excludes_reference_from_stream_evidence(monkeypatch):
+    reference = {
+        **_chunk(_ID_A),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    body = {**_chunk(_ID_B, paper="p2"), "section": "Methods"}
+    _wire(
+        monkeypatch,
+        chunks_per_round=[[reference, body]],
+        tokens=[f"body [chunk:{_ID_B}]"],
+        intent={"intent": "factual", "top_k": 2, "max_iter": 1, "rrf_k": 60},
+    )
+
+    done = _events("How does the method work?")[-1]["data"]
+
+    assert [chunk["chunk_id"] for chunk in done["evidence_chunks"]] == [_ID_B]
+    assert done["citations"] == [_ID_B]
+
+
+def test_reference_only_regular_question_short_circuits_stream_llm(monkeypatch):
+    reference = {
+        **_chunk(_ID_A),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    fake = _wire(monkeypatch, chunks_per_round=[[reference]])
+
+    events = _events("How does the method work?")
+    done = events[-1]["data"]
+
+    assert fake.calls == []
+    assert done["abstain"]["decision"] == "no_evidence"
+    assert done["abstain"]["reason"] == "reference_only"
+
+
+def test_explicit_reference_question_allows_reference_in_stream_evidence(monkeypatch):
+    reference = {
+        **_chunk(_ID_A),
+        "section": "References",
+        "metadata": {"is_references": True},
+    }
+    _wire(
+        monkeypatch,
+        chunks_per_round=[[reference]],
+        tokens=[f"work [chunk:{_ID_A}]"],
+        intent={"intent": "factual", "top_k": 1, "max_iter": 1, "rrf_k": 60},
+    )
+
+    done = _events("Show me the bibliography")[-1]["data"]
+
+    assert [chunk["chunk_id"] for chunk in done["evidence_chunks"]] == [_ID_A]
+    assert done["citations"] == [_ID_A]
 
 
 # ---------- 切片 4: 错误路径 ----------

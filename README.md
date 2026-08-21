@@ -110,12 +110,19 @@ uv sync \
   --extra embed \
   --extra ingest \
   --extra mineru \
-  --extra mcp
+  --extra evaluation \
+  --extra dashboard \
+  --extra mcp \
+  --extra deerflow \
+  --extra deliver \
+  --extra deliver-pdf \
+  --extra proactive \
+  --extra vision-local
 ```
 
-这条命令安装当前完整主链路所需的开发工具、嵌入/精排、论文采集、MinerU 和
-MCP 依赖。在线视觉摘要使用基础依赖中的 OpenAI 兼容客户端，不需要安装
-`vision-local`；只有启用本地视觉后备时才追加 `--extra vision-local`。
+这条命令安装完整项目所需的开发工具、嵌入/精排、论文采集、MinerU、评测、
+Streamlit 前端、MCP 和全部增强 extra。仅使用在线视觉摘要时可以省略
+`vision-local`；`deerflow`、`deliver`、`deliver-pdf`、`proactive` 是可选集成扩展。
 
 依赖组说明：
 
@@ -126,8 +133,13 @@ MCP 依赖。在线视觉摘要使用基础依赖中的 OpenAI 兼容客户端�
 | `mineru` | MinerU OCR 和复杂 PDF 版式解析 |
 | `vision-local` | 可选的本地视觉模型后备，不影响在线视觉模型 |
 | `mcp` | FastMCP 服务和 LangChain MCP 适配器 |
+| `evaluation` | RAGAS、Golden Set 和评测依赖 |
+| `dashboard` | Streamlit 前端 |
+| `deerflow` | DeerFlow/LangChain 工具适配 |
+| `deliver` / `deliver-pdf` | Word、PowerPoint、PDF 交付物 |
+| `proactive` | APScheduler 主动任务 |
 | `dev` | Pytest、Ruff 等开发工具 |
-| `full` | 大多数服务能力的聚合依赖，不包含 MinerU 和本地视觉模型 |
+| `full` | 服务能力聚合依赖；完整启动建议显式安装上面的 extras |
 
 ### 4. 下载嵌入、精排和 MinerU 模型
 
@@ -355,6 +367,27 @@ uv run python scripts/ask.py \
 执行到这里后，完整链路已经启动：本地解析和检索模型负责建立证据库，视觉模型
 增强图表文本，Wiki worker 建立跨论文概念背景，主 QA 模型负责查询规划与回答，
 Agentic QA 负责多轮检索、反思、证据筛选和拒答。
+
+### 10. 启动 Streamlit 前端
+
+保持 Qdrant 运行；若还需继续处理新入库论文的 Wiki 任务，让 Wiki worker 在另一个
+终端运行。最后启动前端：
+
+```bash
+uv run python scripts/start_dashboard.py --address 127.0.0.1 --port 8501
+```
+
+浏览器打开 [http://127.0.0.1:8501](http://127.0.0.1:8501)。局域网访问时可以改用
+`--address 0.0.0.0`，但必须自行增加防火墙、反向代理和身份认证。
+
+前端包含四个完整页面：
+
+* 问答工作台：Agentic、Simple、Stream 三种模式，论文范围、引用、证据和 trace。
+* 数据浏览：上传 PDF 入库，浏览论文、Chunk、图表、Wiki，预览并级联删除论文。
+* 管道监控：入库与检索阶段耗时、检索诊断、候选变化和历史查询。
+* 评测面板：Custom、RAGAS、Composite QA 评测与纯检索 Golden Set。
+
+执行到这里，完整项目已经以可交互前端启动。
 
 ## 使用项目
 
@@ -607,6 +640,30 @@ client = MultiServerMCPClient(
 tools = await client.get_tools()
 ```
 
+### 增量入库
+
+同一论文再次以 --force 入库时，系统按 chunk fingerprint 只更新变化的向量和载荷，删除已移除 chunk，并同步维护 SQLite、FTS5 和 Qdrant，不会整篇重建。
+
+```bash
+uv run python scripts/ingest_batch.py /absolute/path/to/pdfs --force
+uv run python scripts/accept_incremental_ingest.py
+```
+
+要同时强制验证 MinerU、在线 Vision、嵌入、Qdrant 更新和视觉缓存，运行 `scripts/accept_full_incremental_ingest.py`。两个验收脚本都使用隔离目录，不会清理生产数据。
+
+### 评测与质量门禁
+
+Custom 和纯检索评测不需要额外 judge；RAGAS 需要 `.env` 中的 RAGAS_* 配置。默认 Golden Set 位于 `tests/fixtures/evaluation/`。
+
+```bash
+uv run python scripts/evaluate.py --backend custom --test-set tests/fixtures/evaluation/golden.json
+uv run python scripts/evaluate.py --mode retrieval --backend custom --test-set tests/fixtures/evaluation/retrieval_golden.json
+uv run python scripts/evaluate.py --backend ragas --test-set tests/fixtures/evaluation/ragas_golden.json --max-concurrency 4
+uv run python scripts/evaluate.py --backend composite --test-set tests/fixtures/evaluation/golden.json
+```
+
+RAGAS 报告默认写入 `data/evaluation/ragas-<timestamp>.json`；可用 `--compare-baseline` 和 `--max-regression` 做回归门禁。前端评测面板会把运行结果追加到 `data/dashboard/evaluation_history.jsonl`。
+
 ## 配置说明
 
 默认配置文件是 `config/default.yaml`。配置文件优先级：
@@ -669,6 +726,14 @@ uv run ruff format --check .
 
 # 构建 wheel 和源码包
 uv build
+
+# Streamlit 前端真实渲染验收
+uv run python scripts/accept_dashboard.py
+
+# 其他增强能力验收
+uv run python scripts/accept_evaluation.py
+uv run python scripts/accept_mcp_runtime.py
+uv run python scripts/accept_mcp_scope.py
 ```
 
 ## 常见问题

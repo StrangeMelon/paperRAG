@@ -115,6 +115,40 @@ def test_chunks_without_paper_id_do_not_consume_quota():
     assert len(selected) == 3, "无 paper_id 的块不受单篇限额约束"
 
 
+def test_regular_question_excludes_reference_chunks_from_final_evidence():
+    chunks = [
+        _chunk(
+            "ref",
+            score=0.99,
+            section="References",
+            metadata={"is_references": True},
+        ),
+        _chunk("body", paper="p2", score=0.2, section="Methods"),
+    ]
+
+    selected, trace = select_evidence("How does the method work?", chunks, max_chunks=2)
+
+    assert [chunk["chunk_id"] for chunk in selected] == ["body"]
+    assert trace["excluded_reference_chunk_ids"] == ["ref"]
+
+
+def test_explicit_reference_question_allows_reference_chunks_in_final_evidence():
+    chunks = [
+        _chunk(
+            "ref",
+            score=0.99,
+            section="References",
+            metadata={"is_references": True},
+        ),
+        _chunk("body", paper="p2", score=0.2, section="Methods"),
+    ]
+
+    selected, trace = select_evidence("Show me the bibliography", chunks, max_chunks=2)
+
+    assert selected[0]["chunk_id"] == "ref"
+    assert trace["excluded_reference_chunk_ids"] == []
+
+
 # ---------- 切片 3: 四层打分 ----------
 
 

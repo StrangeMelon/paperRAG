@@ -111,11 +111,24 @@ def _resolve_wiki_context_safe(question: str, paper_ids: list[str] | None) -> di
         return {"role": "background_not_evidence", "fingerprint": "", "entries": []}
 
 
-def _cache_question(question: str, wiki_context: dict | None) -> str:
+def _cache_question(
+    question: str,
+    wiki_context: dict | None,
+    *,
+    top_k_override: int | None = None,
+    query_rewrite_enabled: bool = True,
+) -> str:
     fingerprint = (wiki_context or {}).get("fingerprint") or ""
-    if not fingerprint:
+    suffixes = []
+    if fingerprint:
+        suffixes.append(f"wiki_context_fingerprint:{fingerprint}")
+    if top_k_override is not None:
+        suffixes.append(f"retrieval_top_k:{top_k_override}")
+    if not query_rewrite_enabled:
+        suffixes.append("query_rewrite:false")
+    if not suffixes:
         return question
-    return f"{question}\n\nwiki_context_fingerprint:{fingerprint}"
+    return f"{question}\n\n" + "\n".join(suffixes)
 
 
 def _record_wiki_consumption_safe(
@@ -588,6 +601,9 @@ def answer(
     *,
     paper_ids: list[str] | None = None,
     conversation_id: str | None = None,
+    top_k_override: int | None = None,
+    query_rewrite_enabled: bool = True,
+    evaluation_parallel: bool = False,
 ) -> dict:
     from ..observability import histogram, new_trace_id
 
@@ -602,6 +618,9 @@ def answer(
             paper_ids=paper_ids,
             trace_id=trace_id,
             conversation_id=conversation_id,
+            top_k_override=top_k_override,
+            query_rewrite_enabled=query_rewrite_enabled,
+            evaluation_parallel=evaluation_parallel,
         )
     latency_ms = int((perf_counter() - started) * 1000)
     _attach_loop_trace(out, latency_ms=latency_ms)
@@ -618,6 +637,9 @@ def _answer_impl(
     paper_ids: list[str] | None,
     trace_id: str,
     conversation_id: str | None = None,
+    top_k_override: int | None = None,
+    query_rewrite_enabled: bool = True,
+    evaluation_parallel: bool = False,
 ) -> dict:
     from ..observability import counter
 
@@ -636,7 +658,12 @@ def _answer_impl(
         wiki_context=wiki_context,
         trace_id=trace_id,
     )
-    question_for_cache = _cache_question(question, wiki_context)
+    question_for_cache = _cache_question(
+        question,
+        wiki_context,
+        top_k_override=top_k_override,
+        query_rewrite_enabled=query_rewrite_enabled,
+    )
     cached = _check_cache(question_for_cache, validated_scope, trace_id)
     if cached is not None:
         return cached
@@ -647,11 +674,17 @@ def _answer_impl(
         validate_scope=lambda requested, caller: validated_scope,
         resolve_wiki=lambda query, scope: wiki_context,
         classify_intent=classify,
-        retrieve_round=lambda query, scope, top_k, wiki: _retrieve_round(
-            query,
-            scope,
-            top_k,
-            wiki_context=wiki,
+        retrieve_round=lambda query, scope, top_k, wiki, timings=None, reference_intent=None: (
+            _retrieve_round(
+                query,
+                scope,
+                top_k_override if top_k_override is not None else top_k,
+                wiki_context=wiki,
+                timings=timings,
+                rewrite_enabled=query_rewrite_enabled,
+                reference_intent=reference_intent,
+                evaluation_parallel=evaluation_parallel,
+            )
         ),
         reflect=reflect,
         decide_abstain=lambda chunks: _decide_abstain(chunks, cfg.load().rag.abstain),

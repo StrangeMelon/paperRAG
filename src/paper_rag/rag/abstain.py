@@ -61,7 +61,7 @@ DECISION_NO_CHUNKS = "no_chunks"
 # 信号质量分级: 只有高质信号(真实相似度)能区分"无关块排前"与"相关块排前"。
 # 排名型信号(RRF)只反映相对名次做不到; BM25 对域外问题也可能碰巧词面命中。
 # 因此低质信号下 fail open(confident), 降级态作为独立指标透出。
-HIGH_QUALITY_FIELDS = frozenset({"score_rerank", "score_dense", "score"})
+HIGH_QUALITY_FIELDS = frozenset({"score_effective", "score_rerank", "score_dense", "score"})
 LOW_QUALITY_FIELDS = frozenset({"score_bm25", "score_rrf"})
 
 # RRF 分数是 1/(k+rank) 的和, k=60 时典型落在 (0, 0.05]。线性放大到 ~(0, 1]
@@ -94,6 +94,7 @@ def evidence_score(
     chunks: list[dict],
     *,
     score_fields: tuple[str, ...] = (
+        "score_effective",
         "score_rerank",
         "score_dense",
         "score",
@@ -196,6 +197,7 @@ def decide(
     threshold_high: float = 0.40,
     min_chunks: int = 3,
     score_fields: tuple[str, ...] = (
+        "score_effective",  # 参考文献策略处理后的最终相关性分数
         "score_rerank",  # bge-reranker 输出(可用时的最佳信号)
         "score_dense",  # bge-m3 cosine(真实语义相似度)
         "score",  # 兜底别名(qdrant_store 出口设 `score`)
